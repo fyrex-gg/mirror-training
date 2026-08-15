@@ -183,6 +183,7 @@ const imgLink = (q) => "https://www.google.com/search?tbm=isch&q=" + encodeURICo
 const mmss = (t) => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
 const FONT = { fontFamily: "'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif" };
 const BODY = { fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" };
+const CARD_BORDER = "1px solid rgba(255,255,255,0.055)";
 const STORE_KEY = "program-state-v3";
 const MEALDB_TERM = {
   "Chicken breast": "chicken_breast", "Eggs": "eggs", "Greek yogurt": "yogurt", "Whey": "milk",
@@ -281,23 +282,26 @@ function ExCard({ slot, isDeload, doneCount, onTick, variant, setVariant, weight
   const go = (dir) => setVariant((variant + dir + nVars) % nVars);
   const deloadW = weight ? Math.round((weight * 0.6) / slot.step) * slot.step : 0;
   return (
-    <div style={{ background: "#1D2128", borderRadius: 12, padding: "12px 12px 12px 14px", marginBottom: 8,
+    <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 12px 12px 14px", marginBottom: 8,
       display: "flex", gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0 }}
         onTouchStart={(e) => (tX.current = e.touches[0].clientX)}
         onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - tX.current;
           if (dx < -40) go(1); else if (dx > 40) go(-1); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {nVars > 1 && <Arrow onClick={() => go(-1)} label="Previous variation">‹</Arrow>}
+          {nVars > 1 && <Arrow onClick={() => go(-1)} label="Previous variation"><Icon name="chevronLeft" size={15} /></Arrow>}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.n}</div>
           </div>
-          {nVars > 1 && <Arrow onClick={() => go(1)} label="Next variation">›</Arrow>}
+          {nVars > 1 && <Arrow onClick={() => go(1)} label="Next variation"><Icon name="chevronRight" size={15} /></Arrow>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3, gap: 8 }}>
           <div style={{ fontSize: 12, color: "#8A919C", minWidth: 0 }}>{v.note}</div>
           <a href={imgLink(v.n + " exercise proper form")} target="_blank" rel="noreferrer"
-            style={{ fontSize: 12, color, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>form ↗</a>
+            style={{ fontSize: 12, color, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap",
+              display: "inline-flex", alignItems: "center", gap: 3 }}>
+            form <Icon name="external" size={11} />
+          </a>
         </div>
         <div style={{ ...FONT, fontSize: 14, fontWeight: 600, color: "#B9BFC7", marginTop: 6 }}>
           {sets} × {slot.r}{isDeload && <span style={{ color: "#8A919C" }}> @60%{weight ? " ≈ " + deloadW + " kg" : ""}</span>}
@@ -327,11 +331,40 @@ function ExCard({ slot, isDeload, doneCount, onTick, variant, setVariant, weight
   );
 }
 
+// ---------- Small hand-drawn icon set (no icon library, no CDN) ----------
+function Icon({ name, size = 16, color, style }) {
+  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+    stroke: color || "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round",
+    style, "aria-hidden": true };
+  switch (name) {
+    case "chevronLeft": return <svg {...common}><polyline points="15 18 9 12 15 6" /></svg>;
+    case "chevronRight": return <svg {...common}><polyline points="9 18 15 12 9 6" /></svg>;
+    case "external": return (
+      <svg {...common}>
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <polyline points="15 3 21 3 21 9" />
+        <line x1="10" y1="14" x2="21" y2="3" />
+      </svg>
+    );
+    case "clock": return (
+      <svg {...common}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+    );
+    case "bell": return (
+      <svg {...common}>
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    );
+    default: return null;
+  }
+}
+
 function Arrow({ children, onClick, label }) {
   return (
     <button onClick={onClick} aria-label={label}
-      style={{ background: "#14171C", border: "1px solid #333945", color: "#B9BFC7", borderRadius: 7,
-        width: 26, height: 26, cursor: "pointer", fontSize: 16, lineHeight: 1, flexShrink: 0 }}>
+      style={{ background: "#14171C", border: "1px solid #333945", color: "#B9BFC7", borderRadius: 8,
+        width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer", flexShrink: 0 }}>
       {children}
     </button>
   );
@@ -355,20 +388,20 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
   const adjust = (d) => setRest(Math.max(15, Math.min(600, rest + d)));
 
   return (
-    <div style={{ background: "#1D2128", borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+    <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "10px 12px", marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10.5, letterSpacing: 1.6, color: "#8A919C", textTransform: "uppercase" }}>Workout</div>
           <div style={{ ...FONT, fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{mmss(elapsed)}</div>
         </div>
         <button onClick={() => setRunning(!running)}
-          style={{ ...FONT, padding: "8px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+          style={{ ...FONT, padding: "8px 14px", borderRadius: 10, border: "none", cursor: "pointer",
             fontSize: 14, fontWeight: 700, background: running ? "#333945" : color,
             color: running ? "#E8EAED" : "#14171C" }}>
           {running ? "Pause" : elapsed ? "Resume" : "Start"}
         </button>
         <button onClick={() => { setRunning(false); setElapsed(0); setRestLeft(0); onRestCancel && onRestCancel(); }}
-          style={{ ...FONT, padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 14,
+          style={{ ...FONT, padding: "8px 12px", borderRadius: 10, cursor: "pointer", fontSize: 14,
             fontWeight: 600, background: "transparent", border: "1px solid #333945", color: "#8A919C" }}>Reset</button>
       </div>
 
@@ -383,7 +416,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
         </div>
         {presets.map((p) => (
           <button key={p} onClick={() => { onPresetTap && onPresetTap(p); setRest(p); setRestLeft(p); setRunning(true); }}
-            style={{ ...FONT, flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer", fontSize: 13.5,
+            style={{ ...FONT, flex: 1, padding: "9px 0", borderRadius: 10, cursor: "pointer", fontSize: 13.5,
               fontWeight: 600, border: "none", background: rest === p ? "#333945" : "#14171C",
               color: rest === p ? "#E8EAED" : "#8A919C" }}>{p}s</button>
         ))}
@@ -392,17 +425,17 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
       {/* Fine adjustment — rest can be any value from 15s to 10min */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <button onClick={() => adjust(-15)}
-          style={{ ...FONT, padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 14,
+          style={{ ...FONT, padding: "7px 12px", borderRadius: 10, cursor: "pointer", fontSize: 14,
             fontWeight: 700, border: "1px solid #333945", background: "transparent", color: "#B9BFC7" }}>−15s</button>
         <button onClick={() => adjust(15)}
-          style={{ ...FONT, padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 14,
+          style={{ ...FONT, padding: "7px 12px", borderRadius: 10, cursor: "pointer", fontSize: 14,
             fontWeight: 700, border: "1px solid #333945", background: "transparent", color: "#B9BFC7" }}>+15s</button>
         <div style={{ flex: 1, textAlign: "right", fontSize: 11.5, color: "#8A919C" }}>
           rest set to <b style={{ color: "#E8EAED" }}>{mmss(rest)}</b>
         </div>
         {restLeft > 0 && (
           <button onClick={() => { setRestLeft(0); onRestCancel && onRestCancel(); }}
-            style={{ ...FONT, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13,
+            style={{ ...FONT, padding: "7px 10px", borderRadius: 10, cursor: "pointer", fontSize: 13,
               fontWeight: 600, border: "1px solid #333945", background: "transparent", color: "#8A919C" }}>Skip</button>
         )}
       </div>
@@ -414,13 +447,14 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
       {/* Lock-screen options */}
       <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
         <a href={androidTimerUrl(restLeft > 0 ? restLeft : rest, "Rest " + mmss(restLeft > 0 ? restLeft : rest))}
-          style={{ ...FONT, flex: 1, textAlign: "center", padding: "9px 0", borderRadius: 8, fontSize: 13.5,
+          style={{ ...FONT, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            padding: "9px 0", borderRadius: 10, fontSize: 13.5,
             fontWeight: 600, background: "#14171C", border: "1px solid #333945", color: "#B9BFC7",
             textDecoration: "none" }}>
-          ⏱ Phone timer ({mmss(restLeft > 0 ? restLeft : rest)})
+          <Icon name="clock" size={14} /> Phone timer ({mmss(restLeft > 0 ? restLeft : rest)})
         </a>
         <button onClick={() => setKeepAwake(!keepAwake)}
-          style={{ ...FONT, padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13.5,
+          style={{ ...FONT, padding: "9px 12px", borderRadius: 10, cursor: "pointer", fontSize: 13.5,
             fontWeight: 600, border: "1px solid " + (keepAwake ? color : "#333945"),
             background: keepAwake ? "rgba(255,255,255,0.06)" : "transparent",
             color: keepAwake ? "#E8EAED" : "#8A919C" }}>
@@ -433,8 +467,9 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
       </div>
       {notifPerm === "default" && (
         <div onClick={() => onPresetTap && onPresetTap()} role="button"
-          style={{ fontSize: 11, color, marginTop: 5, cursor: "pointer", textDecoration: "underline" }}>
-          Enable lock-screen alerts
+          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color, marginTop: 6,
+            cursor: "pointer", fontWeight: 600 }}>
+          <Icon name="bell" size={12} /> Enable lock-screen alerts
         </div>
       )}
       {notifPerm === "denied" && (
@@ -735,29 +770,30 @@ export default function Program() {
   return (
     <div style={{ ...BODY, background: "#14171C", minHeight: "100vh", color: "#E8EAED" }}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px 40px" }}>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ ...FONT, fontSize: 12, letterSpacing: 2.6, color: "#8A919C", fontWeight: 600 }}>
-              12-WEEK PROGRAM · 2-1-2-2 SPLIT
-            </div>
-            <div style={{ fontSize: 11, whiteSpace: "nowrap",
-              color: storageOk ? "#47A96B" : storageOk === false ? "#D64545" : "#5B626C" }}>
-              {storageOk === true
-                ? (savedAt ? "saved " + savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " ✓" : "auto-save on ✓")
-                : storageOk === false ? "auto-save off — see Rules" : "checking…"}
-            </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ ...FONT, fontSize: 11, letterSpacing: 2, color: "#7A8189", fontWeight: 700 }}>
+            12-WEEK PROGRAM · 2-1-2-2 SPLIT
           </div>
-          <div style={{ ...FONT, fontSize: 31, fontWeight: 700, lineHeight: 1.05, marginTop: 3 }}>
+          <div style={{ ...FONT, fontSize: 30, fontWeight: 800, lineHeight: 1.08, letterSpacing: "-0.01em", marginTop: 5 }}>
             Mirror, not the bar.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, marginTop: 8,
+            color: storageOk ? "#47A96B" : storageOk === false ? "#D64545" : "#5B626C" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+              background: storageOk ? "#47A96B" : storageOk === false ? "#D64545" : "#5B626C" }} />
+            {storageOk === true
+              ? (savedAt ? "Saved " + savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Auto-save on")
+              : storageOk === false ? "Auto-save off — see Rules" : "Checking…"}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 3, marginBottom: 18, background: "#191C22",
+          border: CARD_BORDER, borderRadius: 14, padding: 4 }}>
           {tabs.map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ ...FONT, flex: 1, padding: "9px 2px", fontSize: 13.5, fontWeight: 600,
-                background: tab === id ? "#E8EAED" : "#1D2128", color: tab === id ? "#14171C" : "#8A919C",
-                border: "none", borderRadius: 8, cursor: "pointer" }}>{label}</button>
+                background: tab === id ? "#E8EAED" : "transparent", color: tab === id ? "#14171C" : "#8A919C",
+                border: "none", borderRadius: 10, cursor: "pointer" }}>{label}</button>
           ))}
         </div>
 
@@ -769,21 +805,25 @@ export default function Program() {
               keepAwake={keepAwake} setKeepAwake={setKeepAwake} wakeState={wakeState}
               notifPerm={notifPerm} onPresetTap={onPresetTap} onRestCancel={onRestCancel} />
 
-            <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((w) => {
-                const dl = DELOAD_WEEKS.includes(w);
-                const active = w === week;
-                return (
-                  <button key={w} onClick={() => setWeek(w)}
-                    style={{ ...FONT, minWidth: 44, padding: "7px 0", borderRadius: 8, cursor: "pointer",
-                      border: dl ? "1px dashed #8A919C" : "1px solid transparent",
-                      background: active ? "#E8EAED" : "#1D2128",
-                      color: active ? "#14171C" : dl ? "#B9BFC7" : "#8A919C",
-                      fontSize: 14, fontWeight: 600, lineHeight: 1.1 }}>
-                    W{w}{dl && <div style={{ fontSize: 9, letterSpacing: 0.8 }}>DELOAD</div>}
-                  </button>
-                );
-              })}
+            <div style={{ position: "relative", marginBottom: 8 }}>
+              <div className="no-scrollbar" style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8 }}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((w) => {
+                  const dl = DELOAD_WEEKS.includes(w);
+                  const active = w === week;
+                  return (
+                    <button key={w} onClick={() => setWeek(w)}
+                      style={{ ...FONT, minWidth: 44, padding: "7px 0", borderRadius: 10, cursor: "pointer",
+                        border: dl ? "1px dashed #8A919C" : CARD_BORDER,
+                        background: active ? "#E8EAED" : "#1D2128",
+                        color: active ? "#14171C" : dl ? "#B9BFC7" : "#8A919C",
+                        fontSize: 14, fontWeight: 600, lineHeight: 1.1 }}>
+                      W{w}{dl && <div style={{ fontSize: 9, letterSpacing: 0.8 }}>DELOAD</div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div aria-hidden style={{ position: "absolute", top: 0, right: 0, bottom: 8, width: 28,
+                pointerEvents: "none", background: "linear-gradient(to right, transparent, #14171C)" }} />
             </div>
 
             <div style={{ fontSize: 12, color: "#8A919C", marginBottom: 10 }}>{SCHEDULE_NOTE}</div>
@@ -799,7 +839,7 @@ export default function Program() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginBottom: 14 }}>
               {SESSIONS.map((s) => (
                 <button key={s.id} onClick={() => setSessionId(s.id)}
-                  style={{ ...FONT, padding: "9px 2px", borderRadius: 8, cursor: "pointer", fontSize: 13,
+                  style={{ ...FONT, padding: "9px 2px", borderRadius: 10, cursor: "pointer", fontSize: 13,
                     fontWeight: 600, background: "#1D2128", color: sessionId === s.id ? "#E8EAED" : "#8A919C",
                     border: "none", borderBottom: "3px solid " + (sessionId === s.id ? s.color : "#1D2128") }}>
                   {s.name}
@@ -807,7 +847,7 @@ export default function Program() {
               ))}
             </div>
 
-            <div style={{ background: "#1D2128", borderRadius: 12, padding: "12px 14px", marginBottom: 10,
+            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 10,
               display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <div>
                 <div style={{ ...FONT, fontSize: 22, fontWeight: 700, color: session.color, lineHeight: 1 }}>{session.name}</div>
@@ -844,19 +884,19 @@ export default function Program() {
             <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
               {["bulk", "cut"].map((ph) => (
                 <button key={ph} onClick={() => setPhase(ph)}
-                  style={{ ...FONT, flex: 1, padding: "10px 0", fontSize: 15, fontWeight: 600, borderRadius: 8,
+                  style={{ ...FONT, flex: 1, padding: "10px 0", fontSize: 15, fontWeight: 600, borderRadius: 10,
                     cursor: "pointer", border: "none", background: phase === ph ? "#E8EAED" : "#1D2128",
                     color: phase === ph ? "#14171C" : "#8A919C" }}>{NUTRITION[ph].label}</button>
               ))}
             </div>
 
-            <div style={{ background: "#1D2128", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: 16, marginBottom: 14 }}>
               <div style={{ ...FONT, fontSize: 38, fontWeight: 700, lineHeight: 1 }}>
                 {NUTRITION[phase].kcal}<span style={{ fontSize: 17, color: "#8A919C" }}> kcal/day</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 14 }}>
                 {[["Protein", NUTRITION[phase].protein], ["Fat", NUTRITION[phase].fat], ["Carbs", NUTRITION[phase].carbs]].map(([l, v]) => (
-                  <div key={l} style={{ background: "#14171C", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+                  <div key={l} style={{ background: "#14171C", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
                     <div style={{ ...FONT, fontSize: 18, fontWeight: 700 }}>{v}</div>
                     <div style={{ fontSize: 10.5, letterSpacing: 1.4, color: "#8A919C", textTransform: "uppercase" }}>{l}</div>
                   </div>
@@ -889,7 +929,7 @@ export default function Program() {
             {selectedFoods.length === 0 ? (
               <div style={{ fontSize: 13, color: "#5B626C", marginBottom: 14 }}>Pick foods above to build the list.</div>
             ) : (
-              <div style={{ background: "#1D2128", borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
+              <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "10px 14px", marginBottom: 14 }}>
                 {selectedFoods.map((f) => (
                   <div key={f} onClick={() => setBought({ ...bought, [f]: !bought[f] })}
                     style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", cursor: "pointer",
@@ -902,7 +942,7 @@ export default function Program() {
                   </div>
                 ))}
                 <button onClick={() => setBought({})}
-                  style={{ ...FONT, marginTop: 10, padding: "7px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  style={{ ...FONT, marginTop: 10, padding: "7px 12px", borderRadius: 10, fontSize: 13, fontWeight: 600,
                     background: "transparent", border: "1px solid #333945", color: "#8A919C", cursor: "pointer" }}>
                   Uncheck all
                 </button>
@@ -922,11 +962,11 @@ export default function Program() {
             </button>
             {mealErr && <div style={{ fontSize: 13, color: "#D64545", marginBottom: 10 }}>{mealErr}</div>}
             {meals.map((m, mi) => (
-              <div key={m.id || mi} style={{ background: "#1D2128", borderRadius: 12, overflow: "hidden", marginBottom: 8 }}>
+              <div key={m.id || mi} style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
                 <div style={{ display: "flex", gap: 10, padding: 10 }}>
                   {m.thumb && (
                     <img src={m.thumb} alt="" width="74" height="74"
-                      style={{ borderRadius: 8, objectFit: "cover", flexShrink: 0, background: "#14171C" }} />
+                      style={{ borderRadius: 10, objectFit: "cover", flexShrink: 0, background: "#14171C" }} />
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14.5, fontWeight: 600 }}>{m.name}</div>
@@ -938,8 +978,8 @@ export default function Program() {
                     )}
                     <a href={m.link} target="_blank" rel="noreferrer"
                       style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
-                        display: "inline-block", marginTop: 5 }}>
-                      full recipe ↗
+                        display: "inline-flex", alignItems: "center", gap: 3, marginTop: 5 }}>
+                      full recipe <Icon name="external" size={11} />
                     </a>
                   </div>
                 </div>
@@ -960,7 +1000,7 @@ export default function Program() {
 
         {tab === "off" && (
           <>
-            <div style={{ background: "#1D2128", borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 10 }}>
               <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Pelvic floor · daily, every day</div>
               <div style={{ fontSize: 12, color: "#8A919C", marginBottom: 8 }}>{PELVIC.freq}</div>
               {PELVIC.steps.map((s, i) => (
@@ -972,7 +1012,7 @@ export default function Program() {
               <div style={{ fontSize: 12, color: "#8A919C", marginTop: 6, lineHeight: 1.5, fontStyle: "italic" }}>{PELVIC.note}</div>
             </div>
 
-            <div style={{ background: "#1D2128", borderRadius: 12, padding: "12px 14px", marginBottom: 14,
+            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 14,
               fontSize: 13, color: "#B9BFC7", lineHeight: 1.55 }}>
               Off days = <b style={{ color: "#E8EAED" }}>calisthenics + this mobility list</b>. 2–3 rounds of
               pull-ups / push-ups / dips, always 2+ reps from failure — it's skill work, not a fourth workout.
@@ -991,13 +1031,13 @@ export default function Program() {
         {tab === "rules" && (
           <>
             {RULES.map(([t, d]) => (
-              <div key={t} style={{ background: "#1D2128", borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
+              <div key={t} style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 8 }}>
                 <div style={{ ...FONT, fontSize: 16, fontWeight: 700 }}>{t}</div>
                 <div style={{ fontSize: 13, color: "#B9BFC7", marginTop: 3, lineHeight: 1.5 }}>{d}</div>
               </div>
             ))}
 
-            <div style={{ background: "#1D2128", borderRadius: 12, padding: "12px 14px", marginTop: 14 }}>
+            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginTop: 14 }}>
               <div style={{ ...FONT, fontSize: 16, fontWeight: 700 }}>Saved data</div>
               <div style={{ fontSize: 13, color: "#B9BFC7", marginTop: 3, lineHeight: 1.5, marginBottom: 10 }}>
                 {storageOk
@@ -1013,9 +1053,9 @@ export default function Program() {
               <div style={{ fontSize: 12, color: "#8A919C", marginBottom: 4 }}>Your current backup code</div>
               <textarea readOnly value={backupCode} onFocus={(e) => e.target.select()}
                 style={{ width: "100%", height: 56, background: "#14171C", border: "1px solid #333945",
-                  borderRadius: 8, color: "#8A919C", fontSize: 11, padding: 8, resize: "none", boxSizing: "border-box" }} />
+                  borderRadius: 10, color: "#8A919C", fontSize: 11, padding: 8, resize: "none", boxSizing: "border-box" }} />
               <button onClick={copyBackup}
-                style={{ ...FONT, marginTop: 8, padding: "9px 14px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                style={{ ...FONT, marginTop: 8, padding: "9px 14px", borderRadius: 10, fontSize: 13.5, fontWeight: 600,
                   background: "#333945", border: "none", color: "#E8EAED", cursor: "pointer" }}>
                 Copy code
               </button>
@@ -1027,9 +1067,9 @@ export default function Program() {
               <textarea value={pasteCode} onChange={(e) => setPasteCode(e.target.value)}
                 placeholder="Paste a backup code here…"
                 style={{ width: "100%", height: 56, background: "#14171C", border: "1px solid #333945",
-                  borderRadius: 8, color: "#E8EAED", fontSize: 11, padding: 8, resize: "none", boxSizing: "border-box" }} />
+                  borderRadius: 10, color: "#E8EAED", fontSize: 11, padding: 8, resize: "none", boxSizing: "border-box" }} />
               <button onClick={restoreFromCode} disabled={!pasteCode.trim()}
-                style={{ ...FONT, marginTop: 8, padding: "9px 14px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                style={{ ...FONT, marginTop: 8, padding: "9px 14px", borderRadius: 10, fontSize: 13.5, fontWeight: 600,
                   background: pasteCode.trim() ? "#47A96B" : "#333945", border: "none",
                   color: pasteCode.trim() ? "#14171C" : "#8A919C", cursor: pasteCode.trim() ? "pointer" : "default" }}>
                 Restore
@@ -1041,7 +1081,7 @@ export default function Program() {
                 setWeek(1); setPhase("bulk");
                 try { localStorage.removeItem(STORE_KEY); } catch (e) { /* nothing stored */ }
               }}
-                style={{ ...FONT, marginTop: 16, padding: "9px 14px", borderRadius: 8, fontSize: 13,
+                style={{ ...FONT, marginTop: 16, padding: "9px 14px", borderRadius: 10, fontSize: 13,
                   fontWeight: 600, background: "transparent", border: "1px solid #D64545", color: "#D64545",
                   cursor: "pointer", display: "block" }}>
                 Wipe all data
@@ -1062,7 +1102,10 @@ function Row({ item }) {
         <div style={{ display: "flex", gap: 10, alignItems: "baseline", whiteSpace: "nowrap" }}>
           <div style={{ ...FONT, fontSize: 13, color: "#8A919C" }}>{item.d}</div>
           <a href={imgLink(item.q)} target="_blank" rel="noreferrer"
-            style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600 }}>form ↗</a>
+            style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
+              display: "inline-flex", alignItems: "center", gap: 3 }}>
+            form <Icon name="external" size={11} />
+          </a>
         </div>
       </div>
       {item.note && <div style={{ fontSize: 12, color: "#5B626C", marginTop: 2 }}>{item.note}</div>}
