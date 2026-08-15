@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Info, Check, Plus, Trophy, RotateCcw, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info, Check, Plus, Trophy, RotateCcw, ExternalLink, TrendingUp, MoreVertical } from "lucide-react";
 import { SESSIONS, DELOAD_WEEKS } from "../data/sessions.js";
 import { WSlider } from "./WeightDial.jsx";
+import { MuscleMap } from "./MuscleMap.jsx";
 import { ExerciseModal } from "./ExerciseGuideModal.jsx";
 import RestTimerSheet from "./RestTimerSheet.jsx";
 import EXERCISE_INFO from "../data/exerciseInfo.json";
@@ -14,8 +15,10 @@ import {
 import { newWorkoutId, newSetId, putWorkout, getAllWorkouts, getActiveWorkout } from "../db/workoutDB.js";
 import {
   estimatedOneRepMax, workoutVolume, workoutSetCount, workoutDurationSec,
-  detectPRs, exerciseHistory,
+  detectPRs, exerciseHistory, previousSessionSets, suggestNextWeight, bestBeforeByExercise,
 } from "./workoutStats.js";
+import ExerciseOptionsMenu from "./ExerciseOptionsMenu.jsx";
+import PRToast from "./PRToast.jsx";
 
 const mmss = (t) => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
 const imgLink = (q) => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(q);
@@ -28,7 +31,7 @@ function topOfRange(r) {
 // One completed-or-upcoming set within an exercise card. Completed sets stay
 // inline-editable (weight/reps/RPE are plain state, not locked) — only the
 // checkmark distinguishes "logged" from "not yet".
-function SetRow({ set, index, isNext, slot, color, onChange, onToggleComplete, onRemove }) {
+function SetRow({ set, index, isNext, slot, color, onChange, onToggleComplete, onRemove, rpeEnabled }) {
   const done = !!set.completedAt;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: isNext ? SPACE.md : SPACE.xs,
@@ -37,8 +40,10 @@ function SetRow({ set, index, isNext, slot, color, onChange, onToggleComplete, o
       borderRadius: RADIUS_MD, padding: isNext ? SPACE.md : (SPACE.xs + "px " + SPACE.sm + "px"),
       marginBottom: SPACE.xs }}>
       <div style={{ display: "flex", alignItems: "center", gap: SPACE.sm }}>
-        <div style={{ ...FONT, fontSize: 12, fontWeight: 700, color: done ? ACCENT : TEXT_TERTIARY,
-          width: 18, textAlign: "center", flexShrink: 0 }}>{index + 1}</div>
+        <div style={{ ...FONT, fontSize: set.type === "warmup" || set.type === "drop" ? 9.5 : 12, fontWeight: 700,
+          color: done ? ACCENT : TEXT_TERTIARY, width: 18, textAlign: "center", flexShrink: 0 }}>
+          {set.type === "warmup" ? "W" : set.type === "drop" ? "D" : index + 1}
+        </div>
 
         {isNext ? (
           <div style={{ flex: 1 }}>
@@ -95,15 +100,17 @@ function SetRow({ set, index, isNext, slot, color, onChange, onToggleComplete, o
                 border: "1px solid rgba(255,255,255,0.1)", background: SURFACE_INTERACTIVE, color: TEXT_SECONDARY,
                 fontSize: 18, fontWeight: 700 }}>+</button>
           </div>
-          <div style={{ display: "flex", gap: 3, flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
-            {[6, 7, 8, 9, 10].map((r) => (
-              <button key={r} onClick={() => onChange({ ...set, rpe: set.rpe === r ? null : r })}
-                style={{ ...FONT, width: 26, height: 26, borderRadius: "50%", cursor: "pointer", fontSize: 11,
-                  fontWeight: 700, border: "1px solid " + (set.rpe === r ? ACCENT : "rgba(255,255,255,0.1)"),
-                  background: set.rpe === r ? ACCENT_SOFT : "transparent",
-                  color: set.rpe === r ? ACCENT : TEXT_TERTIARY }}>{r}</button>
-            ))}
-          </div>
+          {rpeEnabled && (
+            <div style={{ display: "flex", gap: 3, flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              {[6, 7, 8, 9, 10].map((r) => (
+                <button key={r} onClick={() => onChange({ ...set, rpe: set.rpe === r ? null : r })}
+                  style={{ ...FONT, width: 26, height: 26, borderRadius: "50%", cursor: "pointer", fontSize: 11,
+                    fontWeight: 700, border: "1px solid " + (set.rpe === r ? ACCENT : "rgba(255,255,255,0.1)"),
+                    background: set.rpe === r ? ACCENT_SOFT : "transparent",
+                    color: set.rpe === r ? ACCENT : TEXT_TERTIARY }}>{r}</button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {done && set.rpe && (
@@ -114,7 +121,7 @@ function SetRow({ set, index, isNext, slot, color, onChange, onToggleComplete, o
 }
 
 function ExerciseCard({ slot, exIndex, isDeload, exercise, onUpdateExercise, color, onOpenExercise,
-                        history, onCompleteSet }) {
+                        previousSets, onCompleteSet, onOpenOptions, rpeEnabled }) {
   const [variant, setVariant] = useState(() => {
     const idx = slot.vars.findIndex((v) => v.n === (exercise && exercise.exerciseName));
     return idx >= 0 ? idx : 0;
@@ -126,16 +133,29 @@ function ExerciseCard({ slot, exIndex, isDeload, exercise, onUpdateExercise, col
   const hasGuide = !!EXERCISE_INFO[v.n];
 
   const nextIndex = sets.findIndex((s) => !s.completedAt);
-  const lastSession = history.length ? history[history.length - 1] : null;
+  // The full set-by-set breakdown from last time this exercise was trained —
+  // not just the last number logged — so a lifter can compare set-for-set
+  // while training, per the plan's "instant previous-vs-current" principle.
+  const lastSet = previousSets.length ? previousSets[previousSets.length - 1] : null;
+  const nudge = !isDeload ? suggestNextWeight(slot, previousSets) : null;
 
   const fillTo = (base) => {
-    const defaultReps = lastSession ? lastSession.reps : topOfRange(slot.r);
-    const defaultWeight = lastSession ? lastSession.weight : slot.min;
+    const defaultReps = lastSet ? lastSet.reps : topOfRange(slot.r);
+    const defaultWeight = lastSet ? lastSet.weight : slot.min;
     const filled = base.slice();
     while (filled.length < targetSets) {
       filled.push({ id: newSetId(), type: "working", weight: defaultWeight, reps: defaultReps, rpe: null, completedAt: null });
     }
     return filled;
+  };
+
+  // Bumps every not-yet-completed set to the suggested weight — already-logged
+  // sets are left untouched, matching how the old tick-based cards' nudge
+  // worked (it only ever adjusted the weight dial, never rewrote history).
+  const applyNudge = () => {
+    if (!nudge) return;
+    const copy = sets.map((s) => (s.completedAt ? s : { ...s, weight: nudge }));
+    onUpdateExercise({ ...exercise, sets: copy });
   };
 
   // Creates the exercise on first render, fills sets up to the target count as
@@ -171,7 +191,7 @@ function ExerciseCard({ slot, exIndex, isDeload, exercise, onUpdateExercise, col
     const wasComplete = !!s.completedAt;
     const next = { ...s, completedAt: wasComplete ? null : Date.now() };
     updateSet(idx, next);
-    if (!wasComplete) onCompleteSet(v.n);
+    if (!wasComplete) onCompleteSet(v.n, next.weight, next.reps);
   };
 
   const addExtraSet = () => {
@@ -217,19 +237,40 @@ function ExerciseCard({ slot, exIndex, isDeload, exercise, onUpdateExercise, col
               border: "1px solid rgba(255,255,255,0.1)", color: TEXT_TERTIARY, display: "flex", alignItems: "center",
               justifyContent: "center", flexShrink: 0 }}><ExternalLink size={13} /></a>
         )}
+        <button onClick={onOpenOptions} aria-label="Exercise options"
+          style={{ width: 28, height: 28, borderRadius: RADIUS_SM, background: "transparent",
+            border: "1px solid rgba(255,255,255,0.1)", color: TEXT_TERTIARY, display: "flex", alignItems: "center",
+            justifyContent: "center", cursor: "pointer", flexShrink: 0 }}><MoreVertical size={14} /></button>
       </div>
 
-      {lastSession && (
-        <div style={{ fontSize: 11.5, color: TEXT_TERTIARY, marginTop: SPACE.sm }}>
-          Last time: {lastSession.weight} kg × {lastSession.reps}
-          {history.length > 1 && (" · e1RM " + Math.round(estimatedOneRepMax(lastSession.weight, lastSession.reps)) + " kg")}
+      {exercise && exercise.note && (
+        <div style={{ fontSize: 11.5, color: TEXT_SECONDARY, marginTop: SPACE.sm, fontStyle: "italic",
+          background: SURFACE_INTERACTIVE, borderRadius: RADIUS_SM, padding: "6px 8px" }}>
+          {exercise.note}
         </div>
+      )}
+
+      {previousSets.length > 0 && (
+        <div style={{ fontSize: 11.5, color: TEXT_TERTIARY, marginTop: SPACE.sm }}>
+          Last time: {previousSets.map((s, i) => (
+            <span key={i}>{i > 0 ? " · " : ""}{s.weight}×{s.reps}</span>
+          ))}
+          {previousSets.length > 1 && (" · e1RM " + Math.round(Math.max(...previousSets.map((s) => estimatedOneRepMax(s.weight, s.reps)))) + " kg")}
+        </div>
+      )}
+      {nudge && (
+        <button onClick={applyNudge}
+          style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6, padding: 0,
+            background: "transparent", border: "none", cursor: "pointer",
+            fontSize: 11.5, fontWeight: 600, color: ACCENT }}>
+          <TrendingUp size={12} /> Hit target every set last time — try {nudge} kg
+        </button>
       )}
 
       <div style={{ marginTop: SPACE.sm }}>
         {sets.map((s, i) => (
           <SetRow key={s.id} set={s} index={i} isNext={i === nextIndex} slot={slot} color={color}
-            onChange={(next) => updateSet(i, next)} onToggleComplete={() => toggleComplete(i)} />
+            onChange={(next) => updateSet(i, next)} onToggleComplete={() => toggleComplete(i)} rpeEnabled={rpeEnabled} />
         ))}
       </div>
 
@@ -300,6 +341,7 @@ export default function WorkoutEngine({
   elapsed, setElapsed, keepAwake, setKeepAwake, wakeState,
   notifPerm, onPresetTap, onRestCancel, exactAlarm, onFixExactAlarm,
   onCompleteSetRest, // (seconds, label) => void — arms notification + starts wall-clock rest
+  rpeEnabled, onActiveChange, // rpeEnabled: bool, default-off RPE picker; onActiveChange: (bool)=>void, lets App.jsx de-emphasize its nav while a workout is in progress
 }) {
   const [allWorkouts, setAllWorkouts] = useState([]);
   const [active, setActive] = useState(null); // in-progress workout record, or null
@@ -308,9 +350,15 @@ export default function WorkoutEngine({
   const [exerciseModal, setExerciseModal] = useState(null);
   const [summary, setSummary] = useState(null); // completed workout to show the recap for
   const [loaded, setLoaded] = useState(false);
+  const [optionsFor, setOptionsFor] = useState(null); // slot index whose "..." menu is open, or null
+  const [prToast, setPrToast] = useState(null); // { exerciseName, weight, reps } | null — instant PR celebration
 
   const session = SESSIONS.find((s) => s.id === sessionId) || SESSIONS[0];
   const isDeload = DELOAD_WEEKS.includes(week);
+
+  useEffect(() => {
+    if (onActiveChange) onActiveChange(!!active);
+  }, [active]);
 
   useEffect(() => {
     (async () => {
@@ -382,7 +430,57 @@ export default function WorkoutEngine({
     setRestLeft(0);
   };
 
-  const historyFor = (exerciseName) => exerciseHistory(allWorkouts, exerciseName);
+  const previousSetsFor = (exerciseName) =>
+    active ? previousSessionSets(allWorkouts, exerciseName, active.startedAt) : [];
+
+  // Fires the instant "New PR!" toast the moment a set beats the best this
+  // exercise has ever hit before this session started — separate from (and
+  // in addition to) the authoritative per-exercise best-set comparison
+  // detectPRs() does once at the end, in SummaryScreen.
+  const checkForPR = (exerciseName, weight, reps) => {
+    if (!weight || !reps || !active) return;
+    const before = bestBeforeByExercise(allWorkouts, active.startedAt);
+    const prior = before.get(exerciseName);
+    const e1rm = estimatedOneRepMax(weight, reps);
+    if (!prior || e1rm > prior.bestE1RM) setPrToast({ exerciseName, weight, reps });
+  };
+
+  const addWarmupSet = (exIndex) => {
+    const exercise = active.exercises[exIndex];
+    if (!exercise) return;
+    const first = exercise.sets[0];
+    const warmup = { id: newSetId(), type: "warmup",
+      weight: first ? Math.round((first.weight * 0.5) / 2.5) * 2.5 : 0,
+      reps: first ? first.reps : 0, rpe: null, completedAt: null };
+    updateExercise(exIndex, { ...exercise, sets: [warmup, ...exercise.sets] });
+  };
+
+  const addDropSet = (exIndex) => {
+    const exercise = active.exercises[exIndex];
+    if (!exercise) return;
+    const last = exercise.sets[exercise.sets.length - 1];
+    const drop = { id: newSetId(), type: "drop",
+      weight: last ? Math.round((last.weight * 0.8) / 2.5) * 2.5 : 0,
+      reps: last ? last.reps : 0, rpe: null, completedAt: null };
+    updateExercise(exIndex, { ...exercise, sets: [...exercise.sets, drop] });
+  };
+
+  const saveNote = (exIndex, text) => {
+    const exercise = active.exercises[exIndex];
+    if (!exercise) return;
+    updateExercise(exIndex, { ...exercise, note: text });
+  };
+
+  // A slot's exercise can't be spliced out of the array (that would shift
+  // every other card's index-based identity) — mark it skipped instead and
+  // hide it from the active view; any sets already completed stay in the
+  // record and still count toward history/stats.
+  const removeExercise = (exIndex) => {
+    const exercise = active.exercises[exIndex];
+    if (!exercise) return;
+    updateExercise(exIndex, { ...exercise, skipped: true,
+      sets: exercise.sets.filter((s) => s.completedAt) });
+  };
 
   if (!loaded) {
     return <div style={{ padding: SPACE.xxl, textAlign: "center", color: TEXT_TERTIARY, fontSize: 13 }}>Loading…</div>;
@@ -394,6 +492,12 @@ export default function WorkoutEngine({
 
   if (resumePrompt) {
     const resumeSession = SESSIONS.find((s) => s.id === resumePrompt.sessionType) || SESSIONS[0];
+    const resumeIsDeload = DELOAD_WEEKS.includes(resumePrompt.programWeek || 1);
+    const resumeTotalSets = resumeSession.slots.reduce((a, s, i) => {
+      const ex = (resumePrompt.exercises || [])[i];
+      return a + (ex && ex.skipped ? 0 : (resumeIsDeload ? 2 : s.s));
+    }, 0);
+    const resumeDoneSets = workoutSetCount(resumePrompt);
     return (
       <div style={{ padding: SPACE.lg }}>
         <div style={{ background: SURFACE, border: "1px solid " + resumeSession.color, borderRadius: RADIUS_LG,
@@ -401,7 +505,8 @@ export default function WorkoutEngine({
           <div style={{ ...FONT, fontSize: 17, fontWeight: 800, color: TEXT_PRIMARY }}>Resume workout?</div>
           <div style={{ fontSize: 13, color: TEXT_SECONDARY, marginTop: SPACE.xs, lineHeight: 1.5 }}>
             You have an unfinished <b style={{ color: resumeSession.color }}>{resumeSession.name}</b> session
-            from {new Date(resumePrompt.startedAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}.
+            from {new Date(resumePrompt.startedAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} —{" "}
+            <b style={{ color: TEXT_PRIMARY }}>{resumeDoneSets}/{resumeTotalSets} sets</b> completed.
           </div>
           <div style={{ display: "flex", gap: SPACE.sm, marginTop: SPACE.lg }}>
             <button onClick={resumeWorkout}
@@ -452,27 +557,36 @@ export default function WorkoutEngine({
     );
   }
 
-  const totalSets = session.slots.reduce((a, s) => a + (isDeload ? 2 : s.s), 0);
+  const totalSets = session.slots.reduce((a, s, i) =>
+    a + ((active.exercises[i] && active.exercises[i].skipped) ? 0 : (isDeload ? 2 : s.s)), 0);
   const doneSets = (active.exercises || []).reduce((a, ex) => a + (ex.sets || []).filter((s) => s.completedAt).length, 0);
+  const optionsExercise = optionsFor != null ? active.exercises[optionsFor] : null;
 
   return (
     <div style={{ padding: SPACE.lg, paddingBottom: 140 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: SPACE.md }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE.md, gap: SPACE.sm }}>
         <div>
           <div style={{ ...FONT, fontSize: 20, fontWeight: 800, color: session.color }}>{session.name}</div>
           <div style={{ fontSize: 12, color: TEXT_TERTIARY, marginTop: 2 }}>
             {doneSets}/{totalSets} sets · {mmss(elapsed)}{isDeload ? " · deload week" : ""}
           </div>
         </div>
+        <MuscleMap highlight={session.muscles} color={session.color} />
       </div>
 
       {session.slots.map((slot, i) => (
-        <ExerciseCard key={sessionId + i} slot={slot} exIndex={i} isDeload={isDeload}
-          exercise={active.exercises[i]}
-          onUpdateExercise={(ex) => updateExercise(i, ex)}
-          color={session.color} onOpenExercise={(name, c) => setExerciseModal({ name, color: c })}
-          history={historyFor(slot.vars[(active.exercises[i] && active.exercises[i].variationId) || 0].n)}
-          onCompleteSet={(exerciseName) => onCompleteSetRest(rest, exerciseName)} />
+        (active.exercises[i] && active.exercises[i].skipped) ? null : (
+          <ExerciseCard key={sessionId + i} slot={slot} exIndex={i} isDeload={isDeload}
+            exercise={active.exercises[i]}
+            onUpdateExercise={(ex) => updateExercise(i, ex)}
+            color={session.color} onOpenExercise={(name, c) => setExerciseModal({ name, color: c })}
+            previousSets={previousSetsFor(slot.vars[(active.exercises[i] && active.exercises[i].variationId) || 0].n)}
+            onCompleteSet={(exerciseName, weight, reps) => {
+              onCompleteSetRest(rest, exerciseName);
+              checkForPR(exerciseName, weight, reps);
+            }}
+            onOpenOptions={() => setOptionsFor(i)} rpeEnabled={rpeEnabled} />
+        )
       ))}
 
       <button onClick={finishWorkout}
@@ -491,6 +605,18 @@ export default function WorkoutEngine({
       {exerciseModal && (
         <ExerciseModal name={exerciseModal.name} color={exerciseModal.color} onClose={() => setExerciseModal(null)} />
       )}
+
+      {optionsExercise && (
+        <ExerciseOptionsMenu exerciseName={optionsExercise.exerciseName} color={session.color}
+          note={optionsExercise.note || ""}
+          onAddWarmup={() => addWarmupSet(optionsFor)}
+          onAddDrop={() => addDropSet(optionsFor)}
+          onSaveNote={(text) => saveNote(optionsFor, text)}
+          onRemove={() => removeExercise(optionsFor)}
+          onClose={() => setOptionsFor(null)} />
+      )}
+
+      <PRToast pr={prToast} onDismiss={() => setPrToast(null)} />
     </div>
   );
 }

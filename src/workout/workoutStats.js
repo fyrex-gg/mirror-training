@@ -81,6 +81,24 @@ export function detectPRs(workout, allWorkouts) {
   return prs;
 }
 
+// The full set-by-set breakdown from the most recent PRIOR session that
+// included this exercise (strictly before `beforeTime`) — e.g. "30x10 30x9
+// 32x7" rather than just a single best/last number, so a lifter can compare
+// this session set-for-set against last time while training.
+export function previousSessionSets(workouts, exerciseName, beforeTime) {
+  const prior = workouts
+    .filter((w) => w.completedAt && w.completedAt < beforeTime)
+    .sort((a, b) => b.completedAt - a.completedAt);
+  for (const w of prior) {
+    for (const ex of w.exercises || []) {
+      if (ex.exerciseName !== exerciseName) continue;
+      const sets = (ex.sets || []).filter((s) => s.completedAt && s.weight && s.reps);
+      if (sets.length) return sets.map((s) => ({ weight: s.weight, reps: s.reps, rpe: s.rpe || null }));
+    }
+  }
+  return [];
+}
+
 // All logged sets for one exercise name across every workout, oldest first —
 // the raw series exercise-history charts/lists are built from.
 export function exerciseHistory(workouts, exerciseName) {

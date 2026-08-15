@@ -16,7 +16,7 @@ function relDate(ts) {
   return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default function HomeScreen({ onGoToWorkout }) {
+export default function HomeScreen({ onGoToWorkout, week }) {
   const [workouts, setWorkouts] = useState([]);
   const [active, setActive] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -42,6 +42,14 @@ export default function HomeScreen({ onGoToWorkout }) {
   const monthVolume = monthWorkouts.reduce((a, w) => a + workoutVolume(w), 0);
   const monthSets = monthWorkouts.reduce((a, w) => a + workoutSetCount(w), 0);
 
+  // No fixed calendar/weekday binding — the next session is just whatever
+  // comes after the last COMPLETED one in the pushA→pullA→pushB→pullB rotation.
+  const lastIdx = lastSession ? SESSIONS.findIndex((s) => s.id === lastSession.id) : -1;
+  const nextSession = lastIdx >= 0 ? SESSIONS[(lastIdx + 1) % SESSIONS.length] : SESSIONS[0];
+  const nextExerciseCount = nextSession.slots.length;
+  const nextEstMinutes = Math.round(nextExerciseCount * 8);
+  const todayLabel = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+
   return (
     <div style={{ padding: SPACE.lg }}>
       <div style={{ ...FONT, fontSize: 11, letterSpacing: 2, color: TEXT_TERTIARY, fontWeight: 700 }}>
@@ -50,6 +58,28 @@ export default function HomeScreen({ onGoToWorkout }) {
       <div style={{ ...FONT, fontSize: 28, fontWeight: 800, color: TEXT_PRIMARY, marginTop: 4, marginBottom: SPACE.lg }}>
         {active ? "Pick up where you left off" : "Ready to train?"}
       </div>
+
+      {!active && (
+        <div style={{ background: SURFACE, border: CARD_BORDER, borderRadius: RADIUS_MD, padding: SPACE.md, marginBottom: SPACE.md }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <div style={{ ...FONT, fontSize: 11, fontWeight: 700, letterSpacing: 1, color: TEXT_TERTIARY, textTransform: "uppercase" }}>
+              {todayLabel}
+            </div>
+            {week != null && (
+              <div style={{ fontSize: 11, color: TEXT_TERTIARY }}>Week {week} of 12</div>
+            )}
+          </div>
+          <div style={{ fontSize: 19, fontWeight: 800, color: nextSession.color, marginTop: 6 }}>
+            {nextSession.name}
+          </div>
+          <div style={{ fontSize: 12.5, color: TEXT_SECONDARY, marginTop: 2 }}>
+            {nextSession.sub}
+          </div>
+          <div style={{ fontSize: 11.5, color: TEXT_TERTIARY, marginTop: 8 }}>
+            {nextExerciseCount} exercises · ~{nextEstMinutes} min
+          </div>
+        </div>
+      )}
 
       {active ? (
         <button onClick={onGoToWorkout}
@@ -69,7 +99,7 @@ export default function HomeScreen({ onGoToWorkout }) {
           style={{ ...FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             width: "100%", background: ACCENT, border: "none", borderRadius: RADIUS_LG, padding: "16px 0",
             fontSize: 16, fontWeight: 800, color: ACCENT_INK, cursor: "pointer", marginBottom: SPACE.md }}>
-          <Play size={17} fill={ACCENT_INK} /> Start a workout
+          <Play size={17} fill={ACCENT_INK} /> Start {nextSession.name}
         </button>
       )}
 

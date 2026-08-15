@@ -94,6 +94,8 @@ export default function Program() {
   const [tab, setTab] = useState("home");
   const [moreTab, setMoreTab] = useState("fuel");
   const [phase, setPhase] = useState("bulk");
+  const [rpeEnabled, setRpeEnabled] = useState(false); // default off — opt-in per the plan
+  const [workoutActive, setWorkoutActive] = useState(false); // de-emphasizes the bottom nav while a session is in progress
   const [foods, setFoods] = useState({});
   const [bought, setBought] = useState({});
   const [meals, setMeals] = useState([]);
@@ -134,7 +136,7 @@ export default function Program() {
   useEffect(() => { checkExactAlarmState().then(setExactAlarm); }, []);
   const fixExactAlarm = async () => setExactAlarm(await requestExactAlarm());
 
-  const fullState = () => ({ foods, bought, week, phase, meals, foodLog, bodyWeight });
+  const fullState = () => ({ foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled });
   const applyState = (s) => {
     if (s.foods) setFoods(s.foods);
     if (s.bought) setBought(s.bought);
@@ -143,6 +145,7 @@ export default function Program() {
     if (s.meals) setMeals(s.meals);
     if (s.foodLog) setFoodLog(s.foodLog);
     if (s.bodyWeight) setBodyWeight(s.bodyWeight);
+    if (typeof s.rpeEnabled === "boolean") setRpeEnabled(s.rpeEnabled);
   };
 
   // Load saved state from localStorage (works in any real browser / PWA / WebView).
@@ -174,11 +177,11 @@ export default function Program() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [foods, bought, week, phase, meals, foodLog, bodyWeight, loaded]);
+  }, [foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled, loaded]);
 
   // Keep the backup code fresh so it's always ready to copy.
   useEffect(() => { setBackupCode(packState(fullState())); },
-    [foods, bought, week, phase, meals, foodLog, bodyWeight]);
+    [foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled]);
 
   // Screen Wake Lock — stops the phone locking mid-set so the timer stays visible.
   useEffect(() => {
@@ -390,7 +393,7 @@ export default function Program() {
   return (
     <div style={{ ...BODY, background: "#14171C", minHeight: "100vh", color: "#E8EAED" }}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 76px" }}>
-        {tab === "home" && <HomeScreen onGoToWorkout={() => setTab("workout")} />}
+        {tab === "home" && <HomeScreen onGoToWorkout={() => setTab("workout")} week={week} />}
 
         {tab === "workout" && (
           <WorkoutEngine week={week} setWeek={setWeek}
@@ -399,7 +402,8 @@ export default function Program() {
             keepAwake={keepAwake} setKeepAwake={setKeepAwake} wakeState={wakeState}
             notifPerm={notifPerm} onPresetTap={onPresetTap} onRestCancel={onRestCancel}
             exactAlarm={exactAlarm} onFixExactAlarm={fixExactAlarm}
-            onCompleteSetRest={startRestFor} />
+            onCompleteSetRest={startRestFor}
+            rpeEnabled={rpeEnabled} onActiveChange={setWorkoutActive} />
         )}
 
         {tab === "history" && <HistoryScreen />}
@@ -603,6 +607,25 @@ export default function Program() {
             ))}
 
             <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginTop: 14 }}>
+              <div style={{ ...FONT, fontSize: 16, fontWeight: 700 }}>Settings</div>
+              <div onClick={() => setRpeEnabled(!rpeEnabled)} role="button"
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                  marginTop: 10, cursor: "pointer" }}>
+                <div>
+                  <div style={{ fontSize: 13.5, color: "#E8EAED", fontWeight: 600 }}>RPE tracking</div>
+                  <div style={{ fontSize: 12, color: "#8A919C", marginTop: 2, lineHeight: 1.4 }}>
+                    Show a 6–10 effort-rating picker on each set while training.
+                  </div>
+                </div>
+                <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, position: "relative",
+                  background: rpeEnabled ? "#47A96B" : "#333945", transition: "background 150ms ease" }}>
+                  <div style={{ position: "absolute", top: 3, left: rpeEnabled ? 21 : 3, width: 20, height: 20,
+                    borderRadius: "50%", background: "#E8EAED", transition: "left 150ms ease" }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginTop: 10 }}>
               <div style={{ ...FONT, fontSize: 16, fontWeight: 700 }}>Saved data</div>
               <div style={{ fontSize: 13, color: "#B9BFC7", marginTop: 3, lineHeight: 1.5, marginBottom: 10 }}>
                 {storageOk
@@ -662,18 +685,27 @@ export default function Program() {
         display: "flex", justifyContent: "center", background: "linear-gradient(to top, #14171C 60%, transparent)",
         paddingTop: 14 }}>
         <div style={{ maxWidth: 480, width: "100%", margin: "0 auto", padding: "0 12px 12px" }}>
+          {/* While a workout is actively in progress, the nav shrinks (smaller
+              icons, no labels, dimmer) so it reads as "still there if you need
+              it" rather than an equally-weighted invitation to tap away mid-set. */}
           <div style={{ display: "flex", gap: 2, background: "#191C22", border: CARD_BORDER, borderRadius: 16,
-            padding: 5, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-            {tabs.map(([id, label, Icon]) => (
-              <button key={id} onClick={() => setTab(id)}
-                style={{ ...FONT, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                  padding: "8px 2px 7px", fontSize: 10, fontWeight: 700, letterSpacing: 0.2,
-                  background: "transparent", color: tab === id ? "#E8EAED" : "#5B626C",
-                  border: "none", borderRadius: 11, cursor: "pointer" }}>
-                <Icon size={19} strokeWidth={tab === id ? 2.4 : 2} />
-                {label}
-              </button>
-            ))}
+            padding: 5, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            opacity: workoutActive && tab === "workout" ? 0.72 : 1,
+            transition: "opacity 180ms ease" }}>
+            {tabs.map(([id, label, Icon]) => {
+              const compact = workoutActive && tab === "workout";
+              return (
+                <button key={id} onClick={() => setTab(id)}
+                  style={{ ...FONT, flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+                    gap: compact ? 0 : 3, padding: compact ? "6px 2px" : "8px 2px 7px", fontSize: 10,
+                    fontWeight: 700, letterSpacing: 0.2,
+                    background: "transparent", color: tab === id ? "#E8EAED" : "#5B626C",
+                    border: "none", borderRadius: 11, cursor: "pointer" }}>
+                  <Icon size={compact ? 16 : 19} strokeWidth={tab === id ? 2.4 : 2} />
+                  {!compact && label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
