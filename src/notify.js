@@ -17,6 +17,26 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 
 const isNative = () => Capacitor.isNativePlatform();
 const REST_NOTIF_ID = 42;
+const SILENT_CHANNEL_ID = "rest-silent";
+
+// Android notifications only respect per-notification `sound`/`silent` on
+// channels below Android 8 — on 8+ (which this app's minSdk covers entirely)
+// the channel itself controls sound, so a channel with no sound configured is
+// the only way to keep the OS notification silent. Created once, lazily —
+// createChannel() is idempotent (recreating with the same id just updates it).
+let channelReady = null;
+function ensureSilentChannel() {
+  if (!channelReady) {
+    channelReady = LocalNotifications.createChannel({
+      id: SILENT_CHANNEL_ID,
+      name: "Rest timer",
+      description: "Rest-over alerts — silent, the in-app beep is the sound",
+      importance: 3,
+      vibration: false,
+    }).catch(() => {});
+  }
+  return channelReady;
+}
 
 export async function ensureNotificationPermission() {
   if (isNative()) {
@@ -95,12 +115,14 @@ async function postToSW(message) {
 export async function armRestNotification(seconds, label) {
   if (!isNative() || !seconds || seconds <= 0) return;
   try {
+    await ensureSilentChannel();
     await LocalNotifications.cancel({ notifications: [{ id: REST_NOTIF_ID }] });
     const result = await LocalNotifications.schedule({
       notifications: [{
         id: REST_NOTIF_ID,
         title: "Rest over",
         body: label || "Next set",
+        channelId: SILENT_CHANNEL_ID,
         schedule: { at: new Date(Date.now() + seconds * 1000), allowWhileIdle: true },
       }],
     });

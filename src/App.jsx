@@ -380,7 +380,7 @@ function androidTimerUrl(seconds, label) {
 
 function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunning,
                  elapsed, setElapsed, keepAwake, setKeepAwake, wakeState,
-                 notifPerm, onPresetTap, onRestCancel, exactAlarm, onFixExactAlarm }) {
+                 notifPerm, onPresetTap, onRestCancel, exactAlarm, onFixExactAlarm, onStartRest }) {
   const pct = restLeft > 0 ? (restLeft / rest) * 100 : 0;
   const presets = [60, 90, 120, 180];
   const adjust = (d) => setRest(Math.max(15, Math.min(600, rest + d)));
@@ -413,7 +413,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
             color: restLeft > 0 ? color : "#5B626C" }}>{restLeft > 0 ? mmss(restLeft) : mmss(rest)}</div>
         </div>
         {presets.map((p) => (
-          <button key={p} onClick={() => { onPresetTap && onPresetTap(p); setRest(p); setRestLeft(p); setRunning(true); }}
+          <button key={p} onClick={() => { onPresetTap && onPresetTap(p); setRest(p); onStartRest(p); }}
             style={{ ...FONT, flex: 1, padding: "9px 0", borderRadius: 10, cursor: "pointer", fontSize: 13.5,
               fontWeight: 600, border: "none", background: rest === p ? "#333945" : "#14171C",
               color: rest === p ? "#E8EAED" : "#8A919C" }}>{p}s</button>
@@ -522,6 +522,12 @@ export default function Program() {
   const [restLeft, setRestLeft] = useState(0);
   const audioRef = useRef(null);
   const restLabelRef = useRef("");
+  // Real wall-clock target for the current rest period. The countdown below
+  // reads this every tick instead of naively decrementing by 1, so it
+  // self-corrects for setInterval drift (delayed ticks, brief backgrounding)
+  // and stays aligned with the native alarm scheduled against the same clock
+  // — without this, the in-app beep and the OS notification could drift apart.
+  const restEndRef = useRef(0);
   const [exerciseModal, setExerciseModal] = useState(null); // { name, color } | null
   const openExercise = (name, color) => setExerciseModal({ name, color });
   const [notifPerm, setNotifPerm] = useState("unsupported");
@@ -637,7 +643,9 @@ export default function Program() {
       setElapsed((e) => e + 1);
       setRestLeft((r) => {
         if (r <= 0) return 0;
-        const next = r - 1;
+        const next = restEndRef.current
+          ? Math.max(0, Math.round((restEndRef.current - Date.now()) / 1000))
+          : Math.max(0, r - 1);
         const label = restLabelRef.current || "Next set";
         if (next <= 0) {
           beep();
@@ -693,6 +701,12 @@ export default function Program() {
   const todayFoodLog = foodLog[todayKey] || [];
   const setTodayFoodLog = (entries) => setFoodLog({ ...foodLog, [todayKey]: entries });
 
+  const startRest = (seconds) => {
+    restEndRef.current = Date.now() + seconds * 1000;
+    setRestLeft(seconds);
+    setRunning(true);
+  };
+
   const tick = (i) => (setIdx, total) => {
     const cur = done[dKey(i)] || 0;
     const next = setIdx < cur ? setIdx : Math.min(setIdx + 1, total);
@@ -702,7 +716,7 @@ export default function Program() {
       const v = slot.vars[variants[vKey(i)] || 0] || slot.vars[0];
       restLabelRef.current = v ? v.n : "";
       armRestNotification(rest, restLabelRef.current || "Next set");
-      setRestLeft(rest); setRunning(true);
+      startRest(rest);
     }
   };
 
@@ -717,7 +731,7 @@ export default function Program() {
     armRestNotification(seconds, "Next set");
   };
 
-  const onRestCancel = () => clearRestNotification();
+  const onRestCancel = () => { restEndRef.current = 0; clearRestNotification(); };
 
   const totalSets = session.slots.reduce((a, s) => a + (isDeload ? 2 : s.s), 0);
   const doneSets = session.slots.reduce((a, s, i) => a + Math.min(done[dKey(i)] || 0, isDeload ? 2 : s.s), 0);
@@ -824,7 +838,7 @@ export default function Program() {
               elapsed={elapsed} setElapsed={setElapsed}
               keepAwake={keepAwake} setKeepAwake={setKeepAwake} wakeState={wakeState}
               notifPerm={notifPerm} onPresetTap={onPresetTap} onRestCancel={onRestCancel}
-              exactAlarm={exactAlarm} onFixExactAlarm={fixExactAlarm} />
+              exactAlarm={exactAlarm} onFixExactAlarm={fixExactAlarm} onStartRest={startRest} />
 
             <div style={{ position: "relative", marginBottom: 8 }}>
               <div className="no-scrollbar" style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8 }}>
