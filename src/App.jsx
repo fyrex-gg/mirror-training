@@ -1,57 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { ExternalLink, Info, Home, Dumbbell, History as HistoryIcon, BarChart3, Menu } from "lucide-react";
+import { Home, Dumbbell, History as HistoryIcon, BarChart3, Menu, Utensils, Wind, BookOpen, Settings, Database, ChevronRight, ChevronLeft } from "lucide-react";
 import { ensureNotificationPermission, currentPermissionState, armRestNotification, notifyRestDone, notifyRestTick, clearRestNotification, checkExactAlarmState, requestExactAlarm } from "./notify.js";
-import EXERCISE_INFO from "./data/exerciseInfo.json";
 import { ExerciseModal } from "./workout/ExerciseGuideModal.jsx";
-import FoodLog from "./FoodLog.jsx";
-import BodyWeightLog from "./BodyWeightLog.jsx";
 import HomeScreen from "./home/HomeScreen.jsx";
 import WorkoutEngine from "./workout/WorkoutEngine.jsx";
 import HistoryScreen from "./history/HistoryScreen.jsx";
 import StatsScreen from "./stats/StatsScreen.jsx";
-
-const NUTRITION = {
-  bulk: { label: "Lean bulk", kcal: "≈ 3,050", protein: "170 g", fat: "75 g", carbs: "≈ 425 g",
-    rate: "Gain ~0.25–0.35 kg per week",
-    adjust: "2-week average rising faster → cut 150 kcal of carbs. Stalled 2 weeks → add 150 kcal." },
-  cut: { label: "Aggressive cut", kcal: "≈ 2,150", protein: "185 g", fat: "65 g", carbs: "≈ 205 g",
-    rate: "Lose ~0.5–0.7 kg per week",
-    adjust: "Stalled 2 weeks → remove 150 kcal of carbs or add one cardio finisher. Keep carbs around training." },
-};
-
-const FOOD_DB = {
-  Protein: ["Chicken breast", "Eggs", "Greek yogurt", "Whey", "Lean beef", "Salmon", "Tuna", "Cottage cheese", "Tofu"],
-  Carbs: ["Rice", "Oats", "Potatoes", "Pasta", "Bread / wraps", "Beans", "Bananas", "Berries"],
-  Fats: ["Olive oil", "Nuts", "Avocado", "Peanut butter"],
-  Veg: ["Broccoli", "Spinach", "Peppers", "Tomatoes", "Cucumber", "Onions & garlic"],
-};
-
-const PELVIC = {
-  freq: "3×/day · ~10 reps each round (≈30/day)",
-  steps: [
-    "Find the muscles: the ones that stop urine mid-stream or hold in gas. A correct rep pulls the penis slightly upward/inward.",
-    "Contract 3–5s, relax 3–5s. Keep your abs, glutes and thighs relaxed — isolate the pelvic floor only.",
-    "Mix in 'quick flicks': fast 1–2s contract/release, 10 reps, to train fast-twitch fibers too.",
-    "Progress to standing once you're consistent seated/lying — standing is harder and more functional.",
-  ],
-  note: "Backed by RCTs: Dorey et al. 2005 found 40% of men regained normal erectile function after 6 months of PFMT; Pastore et al. 2014 found average time-to-ejaculation rose from ~32s to ~146s over 12 weeks. Give it 8–12 weeks before judging results.",
-};
-
-const MOBILITY = [
-  { n: "Dead hang", d: "2 × 30–45s", q: "dead hang shoulder decompression form", note: "Opens shoulders + grip for pull-ups" },
-  { n: "Wrist rocks + extensor stretch", d: "60s", q: "wrist mobility rocks calisthenics warm up", note: "Preps wrists for push-up work" },
-  { n: "Scapular push-up", d: "2 × 10", q: "scapular push up form", note: "Teaches shoulder-blade control" },
-  { n: "Doorway pec stretch", d: "60s / side", q: "doorway pec stretch form", note: "Counters all the pushing volume" },
-  { n: "Couch stretch (hip flexors)", d: "60s / side", q: "couch stretch hip flexor form", note: "Undoes sitting; helps leg day" },
-  { n: "Deep squat hold, heels down", d: "2 × 45s", q: "deep squat hold mobility form", note: "Ankles + hips, low-impact" },
-  { n: "Band dislocates", d: "2 × 12", q: "band shoulder dislocates form", note: "Keeps overhead range honest" },
-];
-
-const FINISHERS = [
-  { n: "Incline walk", d: "10–12 min · 10–12% · 5–6 km/h", q: "incline treadmill walk posture form", note: "Zero joint impact, counts toward weekly aerobic target" },
-  { n: "Bike intervals", d: "8 × (20s hard / 40s easy)", q: "stationary bike sprint interval seat position", note: "Legs only, joints spared" },
-  { n: "Stairs", d: "10 min steady or 6 × (45s hard / 75s easy)", q: "stair climber machine proper form posture", note: "Keep it light given your leg condition" },
-];
+import OffDaysScreen from "./offdays/OffDaysScreen.jsx";
+import FuelScreen from "./fuel/FuelScreen.jsx";
 
 const RULES = [
   ["The split — 4 on, 3 off", "Day 1 Push A → Day 2 Pull A → rest → Day 3 Push B → Day 4 Pull B → rest → rest. Chest and back each get two sessions with different angles (see each session's sub-label) — research shows 2×/week beats 1×/week when volume is equal, but total weekly volume is what really drives growth, not frequency alone."],
@@ -63,9 +19,7 @@ const RULES = [
   ["Aerobic target", "~160 min/week of moderate-vigorous cardio has the strongest exercise evidence for erectile function — the finishers below plus a couple of extra walks gets you there."],
 ];
 
-const imgLink = (q) => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(q);
 const mmss = (t) => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
-const parseNum = (s) => Number(String(s).replace(/[^\d.]/g, "")) || 0;
 const FONT = { fontFamily: "'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif" };
 const BODY = { fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" };
 const CARD_BORDER = "1px solid rgba(255,255,255,0.055)";
@@ -92,7 +46,8 @@ export default function Program() {
   const [loaded, setLoaded] = useState(false);
   const [week, setWeek] = useState(1);
   const [tab, setTab] = useState("home");
-  const [moreTab, setMoreTab] = useState("fuel");
+  const [moreView, setMoreView] = useState(null); // null = menu list; else "fuel" | "off" | "rules" | "settings" | "data"
+  const [offDayLog, setOffDayLog] = useState({}); // { "YYYY-MM-DD": true } — off-day routine completion
   const [phase, setPhase] = useState("bulk");
   const [rpeEnabled, setRpeEnabled] = useState(false); // default off — opt-in per the plan
   const [workoutActive, setWorkoutActive] = useState(false); // de-emphasizes the bottom nav while a session is in progress
@@ -136,7 +91,7 @@ export default function Program() {
   useEffect(() => { checkExactAlarmState().then(setExactAlarm); }, []);
   const fixExactAlarm = async () => setExactAlarm(await requestExactAlarm());
 
-  const fullState = () => ({ foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled });
+  const fullState = () => ({ foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled, offDayLog });
   const applyState = (s) => {
     if (s.foods) setFoods(s.foods);
     if (s.bought) setBought(s.bought);
@@ -146,6 +101,7 @@ export default function Program() {
     if (s.foodLog) setFoodLog(s.foodLog);
     if (s.bodyWeight) setBodyWeight(s.bodyWeight);
     if (typeof s.rpeEnabled === "boolean") setRpeEnabled(s.rpeEnabled);
+    if (s.offDayLog) setOffDayLog(s.offDayLog);
   };
 
   // Load saved state from localStorage (works in any real browser / PWA / WebView).
@@ -177,11 +133,11 @@ export default function Program() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled, loaded]);
+  }, [foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled, offDayLog, loaded]);
 
   // Keep the backup code fresh so it's always ready to copy.
   useEffect(() => { setBackupCode(packState(fullState())); },
-    [foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled]);
+    [foods, bought, week, phase, meals, foodLog, bodyWeight, rpeEnabled, offDayLog]);
 
   // Screen Wake Lock — stops the phone locking mid-set so the timer stays visible.
   useEffect(() => {
@@ -286,12 +242,6 @@ export default function Program() {
     setTimeout(() => setRestoreMsg(""), 3000);
   }
 
-  // Food log is scoped per calendar day — foodLog is { "YYYY-MM-DD": entry[] }
-  // so "Today's totals" actually means today, and old days don't pile up in view.
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const todayFoodLog = foodLog[todayKey] || [];
-  const setTodayFoodLog = (entries) => setFoodLog({ ...foodLog, [todayKey]: entries });
-
   const startRest = (seconds) => {
     restEndRef.current = Date.now() + seconds * 1000;
     setRestLeft(seconds);
@@ -388,7 +338,14 @@ export default function Program() {
     ["home", "Home", Home], ["workout", "Workout", Dumbbell], ["history", "History", HistoryIcon],
     ["stats", "Stats", BarChart3], ["more", "More", Menu],
   ];
-  const moreTabs = [["fuel", "Fuel"], ["off", "Off days"], ["rules", "Rules"]];
+  const moreMenu = [
+    ["fuel", "Fuel", "Macros, food log, meal ideas", Utensils, "#47A96B"],
+    ["off", "Off Days", "Mobility, pelvic floor, cardio", Wind, "#7FA8D9"],
+    ["rules", "Program & Rules", "How the split and progression work", BookOpen, "#E5B93C"],
+    ["settings", "Settings", "RPE tracking and other preferences", Settings, "#B9BFC7"],
+    ["data", "Data & Backup", "Auto-save status and backup code", Database, "#B9BFC7"],
+  ];
+  const moreViewLabel = { fuel: "Fuel", off: "Off Days", rules: "Program & Rules", settings: "Settings", data: "Data & Backup" }[moreView];
 
   return (
     <div style={{ ...BODY, background: "#14171C", minHeight: "100vh", color: "#E8EAED" }}>
@@ -409,195 +366,63 @@ export default function Program() {
         {tab === "history" && <HistoryScreen />}
         {tab === "stats" && <StatsScreen />}
 
-        {tab === "more" && (
+        {tab === "more" && moreView === null && (
           <div style={{ padding: "16px 16px 40px" }}>
             <div style={{ ...FONT, fontSize: 11, letterSpacing: 2, color: "#7A8189", fontWeight: 700 }}>
               MIRROR · 12-WEEK PROGRAM
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, marginTop: 6, marginBottom: 14,
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, marginTop: 6, marginBottom: 18,
               color: storageOk ? "#47A96B" : storageOk === false ? "#D64545" : "#5B626C" }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
                 background: storageOk ? "#47A96B" : storageOk === false ? "#D64545" : "#5B626C" }} />
               {storageOk === true
                 ? (savedAt ? "Saved " + savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Auto-save on")
-                : storageOk === false ? "Auto-save off — see Rules below" : "Checking…"}
+                : storageOk === false ? "Auto-save off — see Data & Backup" : "Checking…"}
             </div>
 
-            <div style={{ display: "flex", gap: 3, marginBottom: 18, background: "#191C22",
-              border: CARD_BORDER, borderRadius: 14, padding: 4 }}>
-              {moreTabs.map(([id, label]) => (
-                <button key={id} onClick={() => setMoreTab(id)}
-                  style={{ ...FONT, flex: 1, padding: "9px 2px", fontSize: 13.5, fontWeight: 600,
-                    background: moreTab === id ? "#E8EAED" : "transparent", color: moreTab === id ? "#14171C" : "#8A919C",
-                    border: "none", borderRadius: 10, cursor: "pointer" }}>{label}</button>
-              ))}
-            </div>
-
-        {moreTab === "fuel" && (
-          <>
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              {["bulk", "cut"].map((ph) => (
-                <button key={ph} onClick={() => setPhase(ph)}
-                  style={{ ...FONT, flex: 1, padding: "10px 0", fontSize: 15, fontWeight: 600, borderRadius: 10,
-                    cursor: "pointer", border: "none", background: phase === ph ? "#E8EAED" : "#1D2128",
-                    color: phase === ph ? "#14171C" : "#8A919C" }}>{NUTRITION[ph].label}</button>
-              ))}
-            </div>
-
-            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: 16, marginBottom: 14 }}>
-              <div style={{ ...FONT, fontSize: 38, fontWeight: 700, lineHeight: 1 }}>
-                {NUTRITION[phase].kcal}<span style={{ fontSize: 17, color: "#8A919C" }}> kcal/day</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 14 }}>
-                {[["Protein", NUTRITION[phase].protein], ["Fat", NUTRITION[phase].fat], ["Carbs", NUTRITION[phase].carbs]].map(([l, v]) => (
-                  <div key={l} style={{ background: "#14171C", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-                    <div style={{ ...FONT, fontSize: 18, fontWeight: 700 }}>{v}</div>
-                    <div style={{ fontSize: 10.5, letterSpacing: 1.4, color: "#8A919C", textTransform: "uppercase" }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 12.5, color: "#B9BFC7", marginTop: 12 }}>{NUTRITION[phase].rate}</div>
-              <div style={{ fontSize: 12.5, color: "#8A919C", marginTop: 4 }}>{NUTRITION[phase].adjust}</div>
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <BodyWeightLog entries={bodyWeight} setEntries={setBodyWeight} color="#47A96B" />
-            </div>
-
-            <FoodLog log={todayFoodLog} setLog={setTodayFoodLog}
-              targets={{
-                kcal: parseNum(NUTRITION[phase].kcal),
-                protein: parseNum(NUTRITION[phase].protein),
-                fat: parseNum(NUTRITION[phase].fat),
-                carbs: parseNum(NUTRITION[phase].carbs),
-              }}
-              color="#47A96B" />
-
-            <div style={{ height: 1, background: "#262B33", margin: "18px 0 16px" }} />
-
-            <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Your foods</div>
-            <div style={{ fontSize: 12.5, color: "#8A919C", marginBottom: 10 }}>
-              Tap what you actually eat — this builds your shopping list and feeds the meal generator.
-            </div>
-            {Object.entries(FOOD_DB).map(([cat, items]) => (
-              <div key={cat} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, letterSpacing: 1.6, color: "#8A919C", textTransform: "uppercase", marginBottom: 6 }}>{cat}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {items.map((f) => (
-                    <button key={f} onClick={() => setFoods({ ...foods, [f]: !foods[f] })}
-                      style={{ padding: "7px 11px", borderRadius: 16, fontSize: 13, cursor: "pointer",
-                        border: "1px solid " + (foods[f] ? "#47A96B" : "#333945"),
-                        background: foods[f] ? "rgba(71,169,107,0.15)" : "#1D2128",
-                        color: foods[f] ? "#8FD6AC" : "#B9BFC7", fontWeight: 500 }}>{f}</button>
-                  ))}
+            {moreMenu.map(([id, label, desc, Icon, iconColor]) => (
+              <button key={id} onClick={() => setMoreView(id)}
+                style={{ ...FONT, display: "flex", alignItems: "center", gap: 12, width: "100%",
+                  textAlign: "left", padding: "13px 14px", borderRadius: 14, marginBottom: 8, cursor: "pointer",
+                  background: "#1D2128", border: CARD_BORDER }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.05)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon size={17} color={iconColor} />
                 </div>
-              </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: "#E8EAED" }}>{label}</div>
+                  <div style={{ fontSize: 12, color: "#8A919C", marginTop: 1 }}>{desc}</div>
+                </div>
+                <ChevronRight size={16} color="#5B626C" style={{ flexShrink: 0 }} />
+              </button>
             ))}
+          </div>
+        )}
 
-            <div style={{ ...FONT, fontSize: 18, fontWeight: 700, margin: "16px 0 4px" }}>Shopping list</div>
-            {selectedFoods.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#5B626C", marginBottom: 14 }}>Pick foods above to build the list.</div>
-            ) : (
-              <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "10px 14px", marginBottom: 14 }}>
-                {selectedFoods.map((f) => (
-                  <div key={f} onClick={() => setBought({ ...bought, [f]: !bought[f] })}
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", cursor: "pointer",
-                      borderBottom: "1px solid #262B33" }}>
-                    <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0,
-                      border: "2px solid " + (bought[f] ? "#47A96B" : "#3A404A"),
-                      background: bought[f] ? "#47A96B" : "transparent" }} />
-                    <div style={{ fontSize: 14, color: bought[f] ? "#5B626C" : "#E8EAED",
-                      textDecoration: bought[f] ? "line-through" : "none" }}>{f}</div>
-                  </div>
-                ))}
-                <button onClick={() => setBought({})}
-                  style={{ ...FONT, marginTop: 10, padding: "7px 12px", borderRadius: 10, fontSize: 13, fontWeight: 600,
-                    background: "transparent", border: "1px solid #333945", color: "#8A919C", cursor: "pointer" }}>
-                  Uncheck all
-                </button>
-              </div>
-            )}
-
-            <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Meal ideas</div>
-            <div style={{ fontSize: 12.5, color: "#8A919C", marginBottom: 10 }}>
-              Searches TheMealDB for real recipes using the foods you picked. Ranked by how many of your ingredients each one uses. Tap a recipe for the full method.
-            </div>
-            <button onClick={genMeals} disabled={mealLoading || selectedFoods.length < 2}
-              style={{ ...FONT, width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
-                fontSize: 15, fontWeight: 700, cursor: mealLoading || selectedFoods.length < 2 ? "default" : "pointer",
-                background: mealLoading || selectedFoods.length < 2 ? "#333945" : "#47A96B",
-                color: mealLoading || selectedFoods.length < 2 ? "#8A919C" : "#14171C", marginBottom: 10 }}>
-              {mealLoading ? "Searching recipes…" : selectedFoods.length < 2 ? "Select at least 2 foods first" : "Find recipes with my foods"}
+        {tab === "more" && moreView !== null && (
+          <div style={{ padding: "16px 16px 40px" }}>
+            <button onClick={() => setMoreView(null)}
+              style={{ ...FONT, display: "flex", alignItems: "center", gap: 4, background: "transparent",
+                border: "none", color: "#8A919C", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                padding: 0, marginBottom: 14 }}>
+              <ChevronLeft size={16} /> {moreViewLabel}
             </button>
-            {mealErr && <div style={{ fontSize: 13, color: "#D64545", marginBottom: 10 }}>{mealErr}</div>}
-            {meals.map((m, mi) => (
-              <div key={m.id || mi} style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
-                <div style={{ display: "flex", gap: 10, padding: 10 }}>
-                  {m.thumb && (
-                    <img src={m.thumb} alt="" width="74" height="74"
-                      style={{ borderRadius: 10, objectFit: "cover", flexShrink: 0, background: "#14171C" }} />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 600 }}>{m.name}</div>
-                    <div style={{ fontSize: 11.5, color: "#8A919C", marginTop: 2 }}>{m.category}</div>
-                    {m.matches > 1 && (
-                      <div style={{ fontSize: 11.5, color: "#8FD6AC", marginTop: 3 }}>
-                        uses {m.matches} of your ingredients
-                      </div>
-                    )}
-                    <a href={m.link} target="_blank" rel="noreferrer"
-                      style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
-                        display: "inline-flex", alignItems: "center", gap: 3, marginTop: 5 }}>
-                      full recipe <ExternalLink size={11} />
-                    </a>
-                  </div>
-                </div>
-                {m.ingredients && m.ingredients.length > 0 && (
-                  <div style={{ padding: "0 12px 11px", fontSize: 12, color: "#8A919C", lineHeight: 1.5 }}>
-                    {m.ingredients.join(" · ")}
-                  </div>
-                )}
-              </div>
-            ))}
-            {meals.length > 0 && (
-              <div style={{ fontSize: 11, color: "#5B626C", textAlign: "center", marginTop: 6 }}>
-                Recipes from TheMealDB. Check portions against your macro targets above.
-              </div>
-            )}
-          </>
+
+        {moreView === "fuel" && (
+          <FuelScreen phase={phase} setPhase={setPhase}
+            foodLog={foodLog} setFoodLog={setFoodLog}
+            bodyWeight={bodyWeight} setBodyWeight={setBodyWeight}
+            foods={foods} setFoods={setFoods} bought={bought} setBought={setBought}
+            meals={meals} mealLoading={mealLoading} mealErr={mealErr} onGenMeals={genMeals}
+            color="#47A96B" />
         )}
 
-        {moreTab === "off" && (
-          <>
-            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 10 }}>
-              <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Pelvic floor · daily, every day</div>
-              <div style={{ fontSize: 12, color: "#8A919C", marginBottom: 8 }}>{PELVIC.freq}</div>
-              {PELVIC.steps.map((s, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontSize: 13, color: "#5B626C", flexShrink: 0 }}>{i + 1}.</div>
-                  <div style={{ fontSize: 13, color: "#B9BFC7", lineHeight: 1.5 }}>{s}</div>
-                </div>
-              ))}
-              <div style={{ fontSize: 12, color: "#8A919C", marginTop: 6, lineHeight: 1.5, fontStyle: "italic" }}>{PELVIC.note}</div>
-            </div>
-
-            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 14,
-              fontSize: 13, color: "#B9BFC7", lineHeight: 1.55 }}>
-              Off days = <b style={{ color: "#E8EAED" }}>calisthenics + this mobility list</b>. 2–3 rounds of
-              pull-ups / push-ups / dips, always 2+ reps from failure — it's skill work, not a fourth workout.
-            </div>
-            <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Mobility · ~12 min daily</div>
-            {MOBILITY.map((m) => <Row key={m.n} item={m} onOpenExercise={openExercise} />)}
-            <div style={{ height: 16 }} />
-            <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Cardio finisher · gym days only</div>
-            <div style={{ fontSize: 12.5, color: "#8A919C", marginBottom: 8 }}>
-              Legs-only on purpose so arms/shoulders stay fresh for calisthenics. Do it after training, not on off days.
-            </div>
-            {FINISHERS.map((f) => <Row key={f.n} item={f} onOpenExercise={openExercise} />)}
-          </>
+        {moreView === "off" && (
+          <OffDaysScreen offDayLog={offDayLog} setOffDayLog={setOffDayLog}
+            onOpenExercise={openExercise} color="#7FA8D9" />
         )}
 
-        {moreTab === "rules" && (
+        {moreView === "rules" && (
           <>
             {RULES.map(([t, d]) => (
               <div key={t} style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginBottom: 8 }}>
@@ -605,29 +430,32 @@ export default function Program() {
                 <div style={{ fontSize: 13, color: "#B9BFC7", marginTop: 3, lineHeight: 1.5 }}>{d}</div>
               </div>
             ))}
+          </>
+        )}
 
-            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginTop: 14 }}>
-              <div style={{ ...FONT, fontSize: 16, fontWeight: 700 }}>Settings</div>
-              <div onClick={() => setRpeEnabled(!rpeEnabled)} role="button"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-                  marginTop: 10, cursor: "pointer" }}>
-                <div>
-                  <div style={{ fontSize: 13.5, color: "#E8EAED", fontWeight: 600 }}>RPE tracking</div>
-                  <div style={{ fontSize: 12, color: "#8A919C", marginTop: 2, lineHeight: 1.4 }}>
-                    Show a 6–10 effort-rating picker on each set while training.
-                  </div>
-                </div>
-                <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, position: "relative",
-                  background: rpeEnabled ? "#47A96B" : "#333945", transition: "background 150ms ease" }}>
-                  <div style={{ position: "absolute", top: 3, left: rpeEnabled ? 21 : 3, width: 20, height: 20,
-                    borderRadius: "50%", background: "#E8EAED", transition: "left 150ms ease" }} />
+        {moreView === "settings" && (
+          <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px" }}>
+            <div onClick={() => setRpeEnabled(!rpeEnabled)} role="button"
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                cursor: "pointer" }}>
+              <div>
+                <div style={{ fontSize: 13.5, color: "#E8EAED", fontWeight: 600 }}>RPE tracking</div>
+                <div style={{ fontSize: 12, color: "#8A919C", marginTop: 2, lineHeight: 1.4 }}>
+                  Show a 6–10 effort-rating picker on each set while training.
                 </div>
               </div>
+              <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, position: "relative",
+                background: rpeEnabled ? "#47A96B" : "#333945", transition: "background 150ms ease" }}>
+                <div style={{ position: "absolute", top: 3, left: rpeEnabled ? 21 : 3, width: 20, height: 20,
+                  borderRadius: "50%", background: "#E8EAED", transition: "left 150ms ease" }} />
+              </div>
             </div>
+          </div>
+        )}
 
-            <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px", marginTop: 10 }}>
-              <div style={{ ...FONT, fontSize: 16, fontWeight: 700 }}>Saved data</div>
-              <div style={{ fontSize: 13, color: "#B9BFC7", marginTop: 3, lineHeight: 1.5, marginBottom: 10 }}>
+        {moreView === "data" && (
+          <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 14px" }}>
+              <div style={{ fontSize: 13, color: "#B9BFC7", lineHeight: 1.5, marginBottom: 10 }}>
                 {storageOk
                   ? "Auto-save is working — phase, food picks and body weight save automatically and reload when you reopen. Workout history saves separately on this device too. The code below is a backup of your food/phase settings for moving to another device."
                   : "Auto-save isn't working here. Copy the backup code below before you close the app, and paste it back next time to restore everything."}
@@ -674,8 +502,7 @@ export default function Program() {
                   cursor: "pointer", display: "block" }}>
                 Wipe all data
               </button>
-            </div>
-          </>
+          </div>
         )}
           </div>
         )}
@@ -718,33 +545,6 @@ export default function Program() {
   );
 }
 
-function Row({ item, onOpenExercise }) {
-  const hasGuide = !!EXERCISE_INFO[item.n];
-  return (
-    <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 12, padding: "10px 14px", marginBottom: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{item.n}</div>
-        <div style={{ display: "flex", gap: 10, alignItems: "baseline", whiteSpace: "nowrap" }}>
-          <div style={{ ...FONT, fontSize: 13, color: "#8A919C" }}>{item.d}</div>
-          {hasGuide ? (
-            <button onClick={() => onOpenExercise(item.n, "#7FA8D9")}
-              style={{ fontSize: 12, color: "#7FA8D9", background: "transparent", border: "none", padding: 0,
-                fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}>
-              guide <Info size={11} />
-            </button>
-          ) : (
-            <a href={imgLink(item.q)} target="_blank" rel="noreferrer"
-              style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
-                display: "inline-flex", alignItems: "center", gap: 3 }}>
-              form <ExternalLink size={11} />
-            </a>
-          )}
-        </div>
-      </div>
-      {item.note && <div style={{ fontSize: 12, color: "#5B626C", marginTop: 2 }}>{item.note}</div>}
-    </div>
-  );
-}
 
 // ---------- In-app exercise guide — bottom sheet, replaces leaving the app for a
 // Google Images search when we have real step-by-step data bundled (see
