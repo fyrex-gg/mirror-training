@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ensureNotificationPermission, notifyRestDone } from "./notify.js";
+import { ensureNotificationPermission, notifyRestDone, notifyRestTick, clearRestNotification } from "./notify.js";
 
 // ---------- Program data: 2-1-2-2 split, chest & back 2x/week, legs light once/week ----------
 const SESSIONS = [
@@ -349,7 +349,7 @@ function androidTimerUrl(seconds, label) {
 
 function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunning,
                  elapsed, setElapsed, keepAwake, setKeepAwake, wakeState,
-                 notifPerm, onPresetTap }) {
+                 notifPerm, onPresetTap, onRestCancel }) {
   const pct = restLeft > 0 ? (restLeft / rest) * 100 : 0;
   const presets = [60, 90, 120, 180];
   const adjust = (d) => setRest(Math.max(15, Math.min(600, rest + d)));
@@ -367,7 +367,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
             color: running ? "#E8EAED" : "#14171C" }}>
           {running ? "Pause" : elapsed ? "Resume" : "Start"}
         </button>
-        <button onClick={() => { setRunning(false); setElapsed(0); setRestLeft(0); }}
+        <button onClick={() => { setRunning(false); setElapsed(0); setRestLeft(0); onRestCancel && onRestCancel(); }}
           style={{ ...FONT, padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 14,
             fontWeight: 600, background: "transparent", border: "1px solid #333945", color: "#8A919C" }}>Reset</button>
       </div>
@@ -401,7 +401,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
           rest set to <b style={{ color: "#E8EAED" }}>{mmss(rest)}</b>
         </div>
         {restLeft > 0 && (
-          <button onClick={() => setRestLeft(0)}
+          <button onClick={() => { setRestLeft(0); onRestCancel && onRestCancel(); }}
             style={{ ...FONT, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13,
               fontWeight: 600, border: "1px solid #333945", background: "transparent", color: "#8A919C" }}>Skip</button>
         )}
@@ -589,8 +589,18 @@ export default function Program() {
       setElapsed((e) => e + 1);
       setRestLeft((r) => {
         if (r <= 0) return 0;
-        if (r === 1) { beep(); notifyRestDone(restLabelRef.current || "Next set"); }
-        return r - 1;
+        const next = r - 1;
+        const label = restLabelRef.current || "Next set";
+        if (next <= 0) {
+          beep();
+          notifyRestDone(label);
+        } else if (next % 5 === 0) {
+          // Refresh the tray notification's remaining-time text every 5s —
+          // web notifications can't tick like a native chronometer, this is
+          // the closest a periodic silent update can get.
+          notifyRestTick(label + " · " + mmss(next) + " left");
+        }
+        return next;
       });
     }, 1000);
     return () => clearInterval(t);
@@ -651,6 +661,8 @@ export default function Program() {
     restLabelRef.current = "";
     requestNotifPermission();
   };
+
+  const onRestCancel = () => clearRestNotification();
 
   const totalSets = session.slots.reduce((a, s) => a + (isDeload ? 2 : s.s), 0);
   const doneSets = session.slots.reduce((a, s, i) => a + Math.min(done[dKey(i)] || 0, isDeload ? 2 : s.s), 0);
@@ -755,7 +767,7 @@ export default function Program() {
               setRestLeft={setRestLeft} running={running} setRunning={setRunning}
               elapsed={elapsed} setElapsed={setElapsed}
               keepAwake={keepAwake} setKeepAwake={setKeepAwake} wakeState={wakeState}
-              notifPerm={notifPerm} onPresetTap={onPresetTap} />
+              notifPerm={notifPerm} onPresetTap={onPresetTap} onRestCancel={onRestCancel} />
 
             <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((w) => {

@@ -57,15 +57,35 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("message", (event) => {
   const data = event.data;
-  if (!data || data.type !== "REST_DONE") return;
-  self.registration.showNotification("Rest over", {
-    body: data.body || "Next set",
-    vibrate: [250, 120, 250],
-    tag: "rest",
-    renotify: true,
-    requireInteraction: false,
-    icon: BASE + "icon-192.png",
-  });
+  if (!data || !data.type) return;
+
+  if (data.type === "REST_DONE") {
+    // Silent — the page's own beep() + navigator.vibrate() are the only
+    // audible/haptic cue. This notification is a visual-only lock-screen record.
+    self.registration.showNotification("Rest over", {
+      body: data.body || "Next set",
+      tag: "rest",
+      renotify: true,
+      silent: true,
+      requireInteraction: false,
+      icon: BASE + "icon-192.png",
+    });
+  } else if (data.type === "REST_TICK") {
+    // Same tag as REST_DONE so it replaces in place — silent so a periodic
+    // refresh never buzzes or re-alerts.
+    self.registration.showNotification("Rest — counting down", {
+      body: data.body || "",
+      tag: "rest",
+      renotify: false,
+      silent: true,
+      requireInteraction: false,
+      icon: BASE + "icon-192.png",
+    });
+  } else if (data.type === "REST_CANCEL") {
+    self.registration.getNotifications({ tag: "rest" }).then((list) => {
+      list.forEach((n) => n.close());
+    });
+  }
 });
 
 self.addEventListener("notificationclick", (event) => {
