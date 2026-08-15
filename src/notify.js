@@ -34,6 +34,35 @@ export async function ensureNotificationPermission() {
   }
 }
 
+// Android 12+ gates *exact* alarms behind a separate "Alarms & reminders" app
+// setting — distinct from, and not covered by, the notification permission
+// above. Without it, the OS silently downgrades our scheduled alarm to an
+// inexact one, which Doze/battery optimization can delay by many minutes.
+// Only meaningful on the native shell; always reads as "granted" on web/pre-12
+// so callers don't need an extra platform check.
+export async function checkExactAlarmState() {
+  if (!isNative()) return "granted";
+  try {
+    const { exact_alarm } = await LocalNotifications.checkExactNotificationSetting();
+    return exact_alarm;
+  } catch (e) {
+    return "unsupported";
+  }
+}
+
+// Deep-links to the system settings screen for the exact-alarm toggle. Resolves
+// with the new state once the user returns to the app, so the caller can
+// update its own UI immediately without a separate re-check.
+export async function requestExactAlarm() {
+  if (!isNative()) return "granted";
+  try {
+    const { exact_alarm } = await LocalNotifications.changeExactNotificationSetting();
+    return exact_alarm;
+  } catch (e) {
+    return "unsupported";
+  }
+}
+
 // Resolves to "granted" | "denied" | "default" | "unsupported", used to drive
 // the Timer card's permission hint on both platforms.
 export async function currentPermissionState() {
@@ -67,7 +96,7 @@ export async function armRestNotification(seconds, label) {
   if (!isNative() || !seconds || seconds <= 0) return;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: REST_NOTIF_ID }] });
-    await LocalNotifications.schedule({
+    const result = await LocalNotifications.schedule({
       notifications: [{
         id: REST_NOTIF_ID,
         title: "Rest over",
@@ -75,6 +104,10 @@ export async function armRestNotification(seconds, label) {
         schedule: { at: new Date(Date.now() + seconds * 1000), allowWhileIdle: true },
       }],
     });
+    // If exact-alarm permission isn't granted, the plugin falls back to an
+    // inexact alarm and reports it here — the Timer card's exact-alarm hint
+    // is the primary fix path, this is just a console breadcrumb for debugging.
+    if (result && result.warning) console.warn("[notify] " + result.warning.message);
   } catch (e) {}
 }
 

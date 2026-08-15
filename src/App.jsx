@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, ChevronLeft, ChevronRight, ExternalLink, Info, Timer as TimerIcon, Bell, TrendingUp } from "lucide-react";
-import { ensureNotificationPermission, currentPermissionState, armRestNotification, notifyRestDone, notifyRestTick, clearRestNotification } from "./notify.js";
+import { ensureNotificationPermission, currentPermissionState, armRestNotification, notifyRestDone, notifyRestTick, clearRestNotification, checkExactAlarmState, requestExactAlarm } from "./notify.js";
 import EXERCISE_INFO from "./data/exerciseInfo.json";
 import FoodLog from "./FoodLog.jsx";
 import BodyWeightLog from "./BodyWeightLog.jsx";
@@ -380,7 +380,7 @@ function androidTimerUrl(seconds, label) {
 
 function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunning,
                  elapsed, setElapsed, keepAwake, setKeepAwake, wakeState,
-                 notifPerm, onPresetTap, onRestCancel }) {
+                 notifPerm, onPresetTap, onRestCancel, exactAlarm, onFixExactAlarm }) {
   const pct = restLeft > 0 ? (restLeft / rest) * 100 : 0;
   const presets = [60, 90, 120, 180];
   const adjust = (d) => setRest(Math.max(15, Math.min(600, rest + d)));
@@ -475,6 +475,13 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
           Notifications blocked in browser settings
         </div>
       )}
+      {exactAlarm !== "granted" && exactAlarm !== "unsupported" && (
+        <div onClick={onFixExactAlarm} role="button"
+          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#E5B93C", marginTop: 5,
+            cursor: "pointer", fontWeight: 600 }}>
+          <TimerIcon size={12} /> Rest alerts may arrive late — tap to allow exact alarms
+        </div>
+      )}
     </div>
   );
 }
@@ -519,6 +526,9 @@ export default function Program() {
   const openExercise = (name, color) => setExerciseModal({ name, color });
   const [notifPerm, setNotifPerm] = useState("unsupported");
   useEffect(() => { currentPermissionState().then(setNotifPerm); }, []);
+  const [exactAlarm, setExactAlarm] = useState("granted");
+  useEffect(() => { checkExactAlarmState().then(setExactAlarm); }, []);
+  const fixExactAlarm = async () => setExactAlarm(await requestExactAlarm());
 
   const session = SESSIONS.find((s) => s.id === sessionId);
   const isDeload = DELOAD_WEEKS.includes(week);
@@ -813,7 +823,8 @@ export default function Program() {
               setRestLeft={setRestLeft} running={running} setRunning={setRunning}
               elapsed={elapsed} setElapsed={setElapsed}
               keepAwake={keepAwake} setKeepAwake={setKeepAwake} wakeState={wakeState}
-              notifPerm={notifPerm} onPresetTap={onPresetTap} onRestCancel={onRestCancel} />
+              notifPerm={notifPerm} onPresetTap={onPresetTap} onRestCancel={onRestCancel}
+              exactAlarm={exactAlarm} onFixExactAlarm={fixExactAlarm} />
 
             <div style={{ position: "relative", marginBottom: 8 }}>
               <div className="no-scrollbar" style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8 }}>
