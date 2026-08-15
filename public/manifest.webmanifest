@@ -1,0 +1,25 @@
+{
+  "name": "Mirror — Training",
+  "short_name": "Mirror",
+  "description": "12-week gym program, rest timer with lock-screen alerts, fuel and off-day tracking.",
+  "start_url": "/mirror-training/",
+  "scope": "/mirror-training/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14171C",
+  "theme_color": "#14171C",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
