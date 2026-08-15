@@ -112,18 +112,40 @@ async function postToSW(message) {
 
 // Call once, the moment a rest period starts, with its full length. No-ops
 // on web — the web path fires from the per-second countdown instead.
+//
+// Posts TWO notifications sharing the same id: one immediately ("Resting…",
+// ongoing, can't be swiped away) so there's visible confirmation a rest period
+// is active the whole time — not just a single ping at the end — and one
+// scheduled for the finish time ("Rest over"), which replaces the ongoing one
+// in the same tray slot when its alarm fires. The plugin has no native
+// chronometer/live-ticking support, so the ongoing one shows a fixed end
+// clock-time ("ends 3:45 PM") rather than a countdown that would go stale.
 export async function armRestNotification(seconds, label) {
   if (!isNative() || !seconds || seconds <= 0) return;
   try {
     await ensureSilentChannel();
     await LocalNotifications.cancel({ notifications: [{ id: REST_NOTIF_ID }] });
+    const endsAt = new Date(Date.now() + seconds * 1000);
+    const endsAtText = endsAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    await LocalNotifications.schedule({
+      notifications: [{
+        id: REST_NOTIF_ID,
+        title: "Resting…",
+        body: (label || "Next set") + " · ends " + endsAtText,
+        channelId: SILENT_CHANNEL_ID,
+        ongoing: true,
+        autoCancel: false,
+      }],
+    });
+
     const result = await LocalNotifications.schedule({
       notifications: [{
         id: REST_NOTIF_ID,
         title: "Rest over",
         body: label || "Next set",
         channelId: SILENT_CHANNEL_ID,
-        schedule: { at: new Date(Date.now() + seconds * 1000), allowWhileIdle: true },
+        schedule: { at: endsAt, allowWhileIdle: true },
       }],
     });
     // If exact-alarm permission isn't granted, the plugin falls back to an
