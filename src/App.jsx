@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ensureNotificationPermission, notifyRestDone, notifyRestTick, clearRestNotification } from "./notify.js";
+import { ensureNotificationPermission, currentPermissionState, armRestNotification, notifyRestDone, notifyRestTick, clearRestNotification } from "./notify.js";
 
 // ---------- Program data: 2-1-2-2 split, chest & back 2x/week, legs light once/week ----------
 const SESSIONS = [
@@ -382,7 +382,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
             color: restLeft > 0 ? color : "#5B626C" }}>{restLeft > 0 ? mmss(restLeft) : mmss(rest)}</div>
         </div>
         {presets.map((p) => (
-          <button key={p} onClick={() => { onPresetTap && onPresetTap(); setRest(p); setRestLeft(p); setRunning(true); }}
+          <button key={p} onClick={() => { onPresetTap && onPresetTap(p); setRest(p); setRestLeft(p); setRunning(true); }}
             style={{ ...FONT, flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer", fontSize: 13.5,
               fontWeight: 600, border: "none", background: rest === p ? "#333945" : "#14171C",
               color: rest === p ? "#E8EAED" : "#8A919C" }}>{p}s</button>
@@ -432,7 +432,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
         Android clock so it rings even when locked{wakeState ? " · screen lock is being held off" : ""}.
       </div>
       {notifPerm === "default" && (
-        <div onClick={onPresetTap} role="button"
+        <div onClick={() => onPresetTap && onPresetTap()} role="button"
           style={{ fontSize: 11, color, marginTop: 5, cursor: "pointer", textDecoration: "underline" }}>
           Enable lock-screen alerts
         </div>
@@ -480,9 +480,8 @@ export default function Program() {
   const [restLeft, setRestLeft] = useState(0);
   const audioRef = useRef(null);
   const restLabelRef = useRef("");
-  const [notifPerm, setNotifPerm] = useState(
-    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
-  );
+  const [notifPerm, setNotifPerm] = useState("unsupported");
+  useEffect(() => { currentPermissionState().then(setNotifPerm); }, []);
 
   const session = SESSIONS.find((s) => s.id === sessionId);
   const isDeload = DELOAD_WEEKS.includes(week);
@@ -647,19 +646,20 @@ export default function Program() {
       const slot = session.slots[i];
       const v = slot.vars[variants[vKey(i)] || 0] || slot.vars[0];
       restLabelRef.current = v ? v.n : "";
+      armRestNotification(rest, restLabelRef.current || "Next set");
       setRestLeft(rest); setRunning(true);
     }
   };
 
-  const requestNotifPermission = () => {
-    const p = ensureNotificationPermission();
-    if (p && p.then) p.then(() => setNotifPerm(Notification.permission));
-    else if (typeof Notification !== "undefined") setNotifPerm(Notification.permission);
+  const requestNotifPermission = async () => {
+    await ensureNotificationPermission();
+    setNotifPerm(await currentPermissionState());
   };
 
-  const onPresetTap = () => {
+  const onPresetTap = async (seconds) => {
     restLabelRef.current = "";
-    requestNotifPermission();
+    await requestNotifPermission();
+    armRestNotification(seconds, "Next set");
   };
 
   const onRestCancel = () => clearRestNotification();

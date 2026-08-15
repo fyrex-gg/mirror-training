@@ -1,0 +1,9 @@
+{
+  "appId": "com.mirror.training",
+  "appName": "Mirror",
+  "webDir": "dist",
+  "server": {
+    "url": "https://fyrex-gg.github.io/mirror-training/",
+    "cleartext": false
+  }
+}
