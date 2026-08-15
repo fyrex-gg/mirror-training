@@ -1,7 +1,7 @@
 // Hand-written service worker: app-shell caching for offline gym use,
 // plus lock-screen rest-timer notifications via postMessage from the page.
 
-const CACHE_VERSION = "mirror-v1";
+const CACHE_VERSION = "mirror-v2";
 const BASE = "/mirror-training/";
 const SHELL_URLS = [BASE, BASE + "manifest.webmanifest", BASE + "icon-192.png", BASE + "icon-512.png"];
 
@@ -36,23 +36,41 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // App shell: cache-first, falling back to network and caching the result.
-  if (url.origin === self.location.origin) {
+  if (url.origin !== self.location.origin) return;
+
+  // The HTML shell: network-first, so a new deploy shows up on the very next
+  // load instead of waiting for a second reload to pick up a refreshed cache.
+  // Falls back to whatever shell is cached when offline.
+  if (request.mode === "navigate") {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request)
-          .then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-            }
-            return res;
-          })
-          .catch(() => cached);
-      })
+      fetch(request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          return res;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match(BASE)))
     );
+    return;
   }
+
+  // Everything else (hashed JS/CSS bundle, icons, manifest): cache-first,
+  // falling back to network and caching the result. Bundle filenames are
+  // content-hashed per build, so cache-first here can never serve something stale.
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => cached);
+    })
+  );
 });
 
 self.addEventListener("message", (event) => {
