@@ -1,9 +1,9 @@
 # Mirror — Training
 
 A personal gym training PWA: 12-week program (2-1-2-2 split), a workout stopwatch
-and adjustable rest timer with lock-screen notifications, fuel/macro tracking with
-recipe search, and off-day mobility/pelvic-floor routines. Everything is saved on
-your device — no accounts, no backend.
+and adjustable rest timer with lock-screen notifications, in-app exercise guides,
+food/macro logging, body-weight tracking, and off-day mobility/pelvic-floor
+routines. Everything is saved on your device — no accounts, no backend.
 
 ## One-time setup: turn on GitHub Pages
 
@@ -116,6 +116,28 @@ The app ID is `com.mirror.training`. `capacitor.config.json` at the repo root
 points the shell at `https://fyrex-gg.github.io/mirror-training/` — if you
 rename the repo or move to a custom domain, update `server.url` there (and
 `vite.config.js`'s `base`) together.
+
+## Feature notes
+
+- **In-app exercise guides.** Tap **guide** on any exercise card for step-by-step
+  instructions and reference photos without leaving the app. Sourced from
+  [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (public domain),
+  hand-matched against this program's exercise list — see `src/data/exerciseInfo.json`
+  and the matching notes in the commit that added it. 54 of the program's 72
+  named exercises/variations have a verified match; the rest (mostly mobility
+  stretches and cardio machines, which that dataset doesn't cover) fall back to
+  the original external image-search link rather than show a wrong or empty guide.
+- **Food/macro logging** (Fuel tab). Searches [Open Food Facts](https://world.openfoodfacts.org)
+  (free, no API key) and logs foods against your bulk/cut macro targets, reset
+  each calendar day. Same graceful-offline-failure pattern as the existing
+  TheMealDB recipe search.
+- **Body-weight log** (Fuel tab) — one number, one tap, with a small trend
+  sparkline.
+- **Consistency heatmap** (Train tab) — a GitHub-style grid of set-completion
+  per session per week, built entirely from data the app already saves.
+- **Weight-progression nudge** — once every set for an exercise is ticked done
+  in a session, its card suggests the next increment (the app's own documented
+  double-progression rule, applied automatically); tap the suggestion to apply it.
 
 ## What's under the hood
 

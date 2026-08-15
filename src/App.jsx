@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from "react";
+import { X, ChevronLeft, ChevronRight, ExternalLink, Info, Timer as TimerIcon, Bell, TrendingUp } from "lucide-react";
 import { ensureNotificationPermission, currentPermissionState, armRestNotification, notifyRestDone, notifyRestTick, clearRestNotification } from "./notify.js";
+import EXERCISE_INFO from "./data/exerciseInfo.json";
+import FoodLog from "./FoodLog.jsx";
+import BodyWeightLog from "./BodyWeightLog.jsx";
+import StreakHeatmap from "./StreakHeatmap.jsx";
+import { suggestNextWeight } from "./progression.js";
 
 // ---------- Program data: 2-1-2-2 split, chest & back 2x/week, legs light once/week ----------
 const SESSIONS = [
@@ -181,6 +187,7 @@ const RULES = [
 
 const imgLink = (q) => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(q);
 const mmss = (t) => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+const parseNum = (s) => Number(String(s).replace(/[^\d.]/g, "")) || 0;
 const FONT = { fontFamily: "'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif" };
 const BODY = { fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" };
 const CARD_BORDER = "1px solid rgba(255,255,255,0.055)";
@@ -274,13 +281,15 @@ function WSlider({ value, min, max, step, onChange, color }) {
 }
 
 // ---------- Exercise card with swipeable variations ----------
-function ExCard({ slot, isDeload, doneCount, onTick, variant, setVariant, weight, setWeight, color }) {
+function ExCard({ slot, isDeload, doneCount, onTick, variant, setVariant, weight, setWeight, color, onOpenExercise }) {
   const tX = useRef(0);
   const sets = isDeload ? 2 : slot.s;
   const v = slot.vars[variant] || slot.vars[0];
   const nVars = slot.vars.length;
   const go = (dir) => setVariant((variant + dir + nVars) % nVars);
   const deloadW = weight ? Math.round((weight * 0.6) / slot.step) * slot.step : 0;
+  const hasGuide = !!EXERCISE_INFO[v.n];
+  const nudge = !isDeload ? suggestNextWeight(slot, weight, doneCount) : null;
   return (
     <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 14, padding: "12px 12px 12px 14px", marginBottom: 8,
       display: "flex", gap: 10 }}>
@@ -289,23 +298,40 @@ function ExCard({ slot, isDeload, doneCount, onTick, variant, setVariant, weight
         onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - tX.current;
           if (dx < -40) go(1); else if (dx > 40) go(-1); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {nVars > 1 && <Arrow onClick={() => go(-1)} label="Previous variation"><Icon name="chevronLeft" size={15} /></Arrow>}
+          {nVars > 1 && <Arrow onClick={() => go(-1)} label="Previous variation"><ChevronLeft size={15} /></Arrow>}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.n}</div>
           </div>
-          {nVars > 1 && <Arrow onClick={() => go(1)} label="Next variation"><Icon name="chevronRight" size={15} /></Arrow>}
+          {nVars > 1 && <Arrow onClick={() => go(1)} label="Next variation"><ChevronRight size={15} /></Arrow>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3, gap: 8 }}>
           <div style={{ fontSize: 12, color: "#8A919C", minWidth: 0 }}>{v.note}</div>
-          <a href={imgLink(v.n + " exercise proper form")} target="_blank" rel="noreferrer"
-            style={{ fontSize: 12, color, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap",
-              display: "inline-flex", alignItems: "center", gap: 3 }}>
-            form <Icon name="external" size={11} />
-          </a>
+          {hasGuide ? (
+            <button onClick={() => onOpenExercise(v.n, color)}
+              style={{ fontSize: 12, color, background: "transparent", border: "none", padding: 0,
+                fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 3 }}>
+              guide <Info size={11} />
+            </button>
+          ) : (
+            <a href={imgLink(v.n + " exercise proper form")} target="_blank" rel="noreferrer"
+              style={{ fontSize: 12, color, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap",
+                display: "inline-flex", alignItems: "center", gap: 3 }}>
+              form <ExternalLink size={11} />
+            </a>
+          )}
         </div>
         <div style={{ ...FONT, fontSize: 14, fontWeight: 600, color: "#B9BFC7", marginTop: 6 }}>
           {sets} × {slot.r}{isDeload && <span style={{ color: "#8A919C" }}> @60%{weight ? " ≈ " + deloadW + " kg" : ""}</span>}
         </div>
+        {nudge && (
+          <button onClick={() => setWeight(nudge.suggest)}
+            style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6, padding: 0,
+              background: "transparent", border: "none", cursor: "pointer",
+              fontSize: 11.5, fontWeight: 600, color }}>
+            <TrendingUp size={12} /> {nudge.reason}
+          </button>
+        )}
         {nVars > 1 && (
           <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
             {slot.vars.map((_, di) => (
@@ -329,34 +355,6 @@ function ExCard({ slot, isDeload, doneCount, onTick, variant, setVariant, weight
         onChange={setWeight} color={color} />
     </div>
   );
-}
-
-// ---------- Small hand-drawn icon set (no icon library, no CDN) ----------
-function Icon({ name, size = 16, color, style }) {
-  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none",
-    stroke: color || "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round",
-    style, "aria-hidden": true };
-  switch (name) {
-    case "chevronLeft": return <svg {...common}><polyline points="15 18 9 12 15 6" /></svg>;
-    case "chevronRight": return <svg {...common}><polyline points="9 18 15 12 9 6" /></svg>;
-    case "external": return (
-      <svg {...common}>
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-        <polyline points="15 3 21 3 21 9" />
-        <line x1="10" y1="14" x2="21" y2="3" />
-      </svg>
-    );
-    case "clock": return (
-      <svg {...common}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-    );
-    case "bell": return (
-      <svg {...common}>
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-      </svg>
-    );
-    default: return null;
-  }
 }
 
 function Arrow({ children, onClick, label }) {
@@ -451,7 +449,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
             padding: "9px 0", borderRadius: 10, fontSize: 13.5,
             fontWeight: 600, background: "#14171C", border: "1px solid #333945", color: "#B9BFC7",
             textDecoration: "none" }}>
-          <Icon name="clock" size={14} /> Phone timer ({mmss(restLeft > 0 ? restLeft : rest)})
+          <TimerIcon size={14} /> Phone timer ({mmss(restLeft > 0 ? restLeft : rest)})
         </a>
         <button onClick={() => setKeepAwake(!keepAwake)}
           style={{ ...FONT, padding: "9px 12px", borderRadius: 10, cursor: "pointer", fontSize: 13.5,
@@ -469,7 +467,7 @@ function Timer({ color, rest, setRest, restLeft, setRestLeft, running, setRunnin
         <div onClick={() => onPresetTap && onPresetTap()} role="button"
           style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color, marginTop: 6,
             cursor: "pointer", fontWeight: 600 }}>
-          <Icon name="bell" size={12} /> Enable lock-screen alerts
+          <Bell size={12} /> Enable lock-screen alerts
         </div>
       )}
       {notifPerm === "denied" && (
@@ -496,6 +494,8 @@ export default function Program() {
   const [meals, setMeals] = useState([]);
   const [mealLoading, setMealLoading] = useState(false);
   const [mealErr, setMealErr] = useState(null);
+  const [foodLog, setFoodLog] = useState([]);
+  const [bodyWeight, setBodyWeight] = useState([]);
 
   const [storageOk, setStorageOk] = useState(null); // null=checking, true/false
   const [storageWhy, setStorageWhy] = useState("");
@@ -515,13 +515,15 @@ export default function Program() {
   const [restLeft, setRestLeft] = useState(0);
   const audioRef = useRef(null);
   const restLabelRef = useRef("");
+  const [exerciseModal, setExerciseModal] = useState(null); // { name, color } | null
+  const openExercise = (name, color) => setExerciseModal({ name, color });
   const [notifPerm, setNotifPerm] = useState("unsupported");
   useEffect(() => { currentPermissionState().then(setNotifPerm); }, []);
 
   const session = SESSIONS.find((s) => s.id === sessionId);
   const isDeload = DELOAD_WEEKS.includes(week);
 
-  const fullState = () => ({ done, weights, variants, foods, bought, week, phase, meals });
+  const fullState = () => ({ done, weights, variants, foods, bought, week, phase, meals, foodLog, bodyWeight });
   const applyState = (s) => {
     if (s.done) setDone(s.done);
     if (s.weights) setWeights(s.weights);
@@ -531,6 +533,8 @@ export default function Program() {
     if (s.week) setWeek(s.week);
     if (s.phase) setPhase(s.phase);
     if (s.meals) setMeals(s.meals);
+    if (s.foodLog) setFoodLog(s.foodLog);
+    if (s.bodyWeight) setBodyWeight(s.bodyWeight);
   };
 
   // Load saved state from localStorage (works in any real browser / PWA / WebView).
@@ -562,11 +566,11 @@ export default function Program() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [done, weights, variants, foods, bought, week, phase, meals, loaded]);
+  }, [done, weights, variants, foods, bought, week, phase, meals, foodLog, bodyWeight, loaded]);
 
   // Keep the backup code fresh so it's always ready to copy.
   useEffect(() => { setBackupCode(packState(fullState())); },
-    [done, weights, variants, foods, bought, week, phase, meals]);
+    [done, weights, variants, foods, bought, week, phase, meals, foodLog, bodyWeight]);
 
   // Screen Wake Lock — stops the phone locking mid-set so the timer stays visible.
   useEffect(() => {
@@ -672,6 +676,12 @@ export default function Program() {
   const dKey = (i) => week + "-" + sessionId + "-" + i;
   const vKey = (i) => sessionId + "-" + i;
   const wKey = (i) => sessionId + "-" + i + "-" + (variants[vKey(i)] || 0);
+
+  // Food log is scoped per calendar day — foodLog is { "YYYY-MM-DD": entry[] }
+  // so "Today's totals" actually means today, and old days don't pile up in view.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayFoodLog = foodLog[todayKey] || [];
+  const setTodayFoodLog = (entries) => setFoodLog({ ...foodLog, [todayKey]: entries });
 
   const tick = (i) => (setIdx, total) => {
     const cur = done[dKey(i)] || 0;
@@ -828,6 +838,10 @@ export default function Program() {
 
             <div style={{ fontSize: 12, color: "#8A919C", marginBottom: 10 }}>{SCHEDULE_NOTE}</div>
 
+            <div style={{ marginBottom: 12 }}>
+              <StreakHeatmap done={done} sessions={SESSIONS} deloadWeeks={DELOAD_WEEKS} color={session.color} />
+            </div>
+
             {isDeload && (
               <div style={{ background: "#1D2128", border: "1px dashed #8A919C", borderRadius: 10,
                 padding: "10px 12px", fontSize: 13, color: "#B9BFC7", marginBottom: 12 }}>
@@ -871,7 +885,7 @@ export default function Program() {
                 setVariant={(vi) => setVariants({ ...variants, [vKey(i)]: vi })}
                 weight={weights[wKey(i)]}
                 setWeight={(w) => setWeights({ ...weights, [wKey(i)]: w })}
-                color={session.color} />
+                color={session.color} onOpenExercise={openExercise} />
             ))}
             <div style={{ fontSize: 11.5, color: "#5B626C", textAlign: "center", marginTop: 10 }}>
               {storageOk ? "Progress saves automatically on this device." : "Auto-save isn't available here — copy your backup code in the Rules tab before closing."}
@@ -905,6 +919,21 @@ export default function Program() {
               <div style={{ fontSize: 12.5, color: "#B9BFC7", marginTop: 12 }}>{NUTRITION[phase].rate}</div>
               <div style={{ fontSize: 12.5, color: "#8A919C", marginTop: 4 }}>{NUTRITION[phase].adjust}</div>
             </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <BodyWeightLog entries={bodyWeight} setEntries={setBodyWeight} color="#47A96B" />
+            </div>
+
+            <FoodLog log={todayFoodLog} setLog={setTodayFoodLog}
+              targets={{
+                kcal: parseNum(NUTRITION[phase].kcal),
+                protein: parseNum(NUTRITION[phase].protein),
+                fat: parseNum(NUTRITION[phase].fat),
+                carbs: parseNum(NUTRITION[phase].carbs),
+              }}
+              color="#47A96B" />
+
+            <div style={{ height: 1, background: "#262B33", margin: "18px 0 16px" }} />
 
             <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Your foods</div>
             <div style={{ fontSize: 12.5, color: "#8A919C", marginBottom: 10 }}>
@@ -979,7 +1008,7 @@ export default function Program() {
                     <a href={m.link} target="_blank" rel="noreferrer"
                       style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
                         display: "inline-flex", alignItems: "center", gap: 3, marginTop: 5 }}>
-                      full recipe <Icon name="external" size={11} />
+                      full recipe <ExternalLink size={11} />
                     </a>
                   </div>
                 </div>
@@ -1018,13 +1047,13 @@ export default function Program() {
               pull-ups / push-ups / dips, always 2+ reps from failure — it's skill work, not a fourth workout.
             </div>
             <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Mobility · ~12 min daily</div>
-            {MOBILITY.map((m) => <Row key={m.n} item={m} />)}
+            {MOBILITY.map((m) => <Row key={m.n} item={m} onOpenExercise={openExercise} />)}
             <div style={{ height: 16 }} />
             <div style={{ ...FONT, fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Cardio finisher · gym days only</div>
             <div style={{ fontSize: 12.5, color: "#8A919C", marginBottom: 8 }}>
               Legs-only on purpose so arms/shoulders stay fresh for calisthenics. Do it after training, not on off days.
             </div>
-            {FINISHERS.map((f) => <Row key={f.n} item={f} />)}
+            {FINISHERS.map((f) => <Row key={f.n} item={f} onOpenExercise={openExercise} />)}
           </>
         )}
 
@@ -1090,25 +1119,99 @@ export default function Program() {
           </>
         )}
       </div>
+      {exerciseModal && (
+        <ExerciseModal name={exerciseModal.name} color={exerciseModal.color}
+          onClose={() => setExerciseModal(null)} />
+      )}
     </div>
   );
 }
 
-function Row({ item }) {
+function Row({ item, onOpenExercise }) {
+  const hasGuide = !!EXERCISE_INFO[item.n];
   return (
-    <div style={{ background: "#1D2128", borderRadius: 10, padding: "10px 14px", marginBottom: 6 }}>
+    <div style={{ background: "#1D2128", border: CARD_BORDER, borderRadius: 12, padding: "10px 14px", marginBottom: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>{item.n}</div>
         <div style={{ display: "flex", gap: 10, alignItems: "baseline", whiteSpace: "nowrap" }}>
           <div style={{ ...FONT, fontSize: 13, color: "#8A919C" }}>{item.d}</div>
-          <a href={imgLink(item.q)} target="_blank" rel="noreferrer"
-            style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
-              display: "inline-flex", alignItems: "center", gap: 3 }}>
-            form <Icon name="external" size={11} />
-          </a>
+          {hasGuide ? (
+            <button onClick={() => onOpenExercise(item.n, "#7FA8D9")}
+              style={{ fontSize: 12, color: "#7FA8D9", background: "transparent", border: "none", padding: 0,
+                fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}>
+              guide <Info size={11} />
+            </button>
+          ) : (
+            <a href={imgLink(item.q)} target="_blank" rel="noreferrer"
+              style={{ fontSize: 12, color: "#7FA8D9", textDecoration: "none", fontWeight: 600,
+                display: "inline-flex", alignItems: "center", gap: 3 }}>
+              form <ExternalLink size={11} />
+            </a>
+          )}
         </div>
       </div>
       {item.note && <div style={{ fontSize: 12, color: "#5B626C", marginTop: 2 }}>{item.note}</div>}
+    </div>
+  );
+}
+
+// ---------- In-app exercise guide — bottom sheet, replaces leaving the app for a
+// Google Images search when we have real step-by-step data bundled (see
+// src/data/exerciseInfo.json, matched from the free-exercise-db public-domain dataset).
+function ExerciseModal({ name, color, onClose }) {
+  const info = EXERCISE_INFO[name];
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!info) return null;
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label={name + " guide"} onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50,
+        display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ ...BODY, background: "#1D2128", border: CARD_BORDER, borderBottom: "none",
+          borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 480, maxHeight: "85vh",
+          overflowY: "auto", padding: "18px 18px 28px", color: "#E8EAED" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ ...FONT, fontSize: 19, fontWeight: 800, color }}>{name}</div>
+            <div style={{ fontSize: 11.5, color: "#8A919C", marginTop: 3, textTransform: "capitalize" }}>
+              {[info.equipment, ...(info.primaryMuscles || [])].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+          <button onClick={onClose} aria-label="Close"
+            style={{ background: "#14171C", border: "1px solid #333945", borderRadius: 10, width: 32, height: 32,
+              display: "flex", alignItems: "center", justifyContent: "center", color: "#B9BFC7", cursor: "pointer",
+              flexShrink: 0 }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {info.images && info.images.length > 0 && (
+          <div style={{ display: "flex", gap: 8, marginTop: 14, overflowX: "auto" }} className="no-scrollbar">
+            {info.images.map((src) => (
+              <img key={src} src={src} alt="" loading="lazy"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                style={{ height: 160, borderRadius: 10, background: "#14171C", flexShrink: 0 }} />
+            ))}
+          </div>
+        )}
+
+        <ol style={{ margin: "16px 0 0", padding: "0 0 0 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {info.instructions.map((step, i) => (
+            <li key={i} style={{ fontSize: 13.5, color: "#B9BFC7", lineHeight: 1.55, paddingLeft: 2 }}>{step}</li>
+          ))}
+        </ol>
+
+        <a href={imgLink(name + " exercise proper form")} target="_blank" rel="noreferrer"
+          style={{ fontSize: 11.5, color: "#5B626C", textDecoration: "none", fontWeight: 600,
+            display: "inline-flex", alignItems: "center", gap: 3, marginTop: 16 }}>
+          More examples <ExternalLink size={10} />
+        </a>
+      </div>
     </div>
   );
 }
